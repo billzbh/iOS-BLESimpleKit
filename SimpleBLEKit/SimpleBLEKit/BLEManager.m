@@ -11,7 +11,7 @@
 #import <ExternalAccessory/ExternalAccessory.h>
 #import <CoreFoundation/CFByteOrder.h>
 
-#define BLE_SDK_VERSION @"20170806_LAST_COMMIT=126dd99"
+#define BLE_SDK_VERSION @"20170806_V1.0"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -79,19 +79,6 @@
     return sharedInstance;
 }
 
--(void)replaceCentralManager:(CBCentralManager *)central{
-    
-    _centralManager.delegate = nil;
-    _centralManager = central;
-    dispatch_queue_t _centralManagerQueue = dispatch_queue_create("com.zbh.SimpleBLEKit.centralManagerQueue", DISPATCH_QUEUE_SERIAL);
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored"-Wunused-value"
-    //重新初始化delegate和queue
-    [_centralManager initWithDelegate:self queue:_centralManagerQueue options:@{CBCentralManagerOptionShowPowerAlertKey:@YES,CBCentralManagerOptionRestoreIdentifierKey: BLE_SDK_RestoreIdentifierKey}];
-#pragma clang diagnostic pop
-}
-
 -(NSString *)getSDKVersion{
     return BLE_SDK_VERSION;
 }
@@ -132,6 +119,8 @@
         if(_isLogOn) NSLog(@"蓝牙状态异常，请打开蓝牙");
         return;
     }
+    
+    //TODO
     //如果自己公司的SDK要兼容几种不同协议的外设
     //可以直接在这里通过不同的外设名称，区分不同的收发规则等，外部调用就不再需要设置，也不会暴露协议。
     //还可以通过不同的外设名称，将外设对象返回给更复杂功能的对象，使得它可以利用外设的通讯方法封装更多不同的方法。
@@ -154,6 +143,7 @@
     [self startScan:^(SimplePeripheral * _Nonnull peripheral) {
         if ([btNameArray containsObject:[peripheral getPeripheralName]]) {
             
+            //TODO
             //如果自己公司的SDK要兼容几种不同协议的外设
             //可以直接在这里通过不同的外设名称，区分不同的收发规则等，外部调用就不再需要设置，也不会暴露协议。
             //还可以通过不同的外设名称，将外设对象返回给更复杂功能的对象，使得它可以利用外设的通讯方法封装更多不同的方法。
@@ -239,12 +229,6 @@
         }
     });
   
-    //测试一下
-//    NSUUID *A = [[NSUUID alloc] initWithUUIDString:@"78"];
-//    NSUUID *B = [[NSUUID alloc] initWithUUIDString:@"21"];
-//    NSArray<CBPeripheral *>* connectPeripheralsXXX = [_centralManager retrievePeripheralsWithIdentifiers:@[A,B]];
-//    NSLog(@"%@",connectPeripheralsXXX);
-    
     //上报系统中别的app已经连接的,但此对象_centralManager还未连接的蓝牙设备
     if ([_services count]>0) {
         
