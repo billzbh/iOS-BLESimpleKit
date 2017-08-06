@@ -1,5 +1,5 @@
-# iOS-SimpleBLEKit
-iOS上BLE的简单粗暴工具类。流程简单直观。适合新手使用。
+# iOS-BLE-SimpleKit
+对ios系统中，BLE蓝牙当做中央模式下的轻量级封装。适合和智能硬件如手环、读卡器等设备的蓝牙交互
 ## 一. demo效果
 
 iPad demo:
@@ -14,70 +14,63 @@ iphone demo：
 
 ![iphone_3](https://github.com/billzbh/iOS-SimpleBLEKit/blob/master/image/IMG_0013.jpg)
 
-## 二. 写这个很SimpleBLE的背景
-工作中，时不时有新的开发任务，需要接入新的蓝牙设备，而且可能蓝牙设备的报文通讯协议也是不一样的。这样以前写好的SDK中的协议就不通用了。但是对于蓝牙设备连接部分，那都是差不多的，流程是一致。
+## 二. 解决什么需求
+1. 单例，中央设备只维护一个，提供基础的搜索和连接接口
+2. 能同时连接多个外设，各自通讯互不影响
+3. 中央设备能管理所有已经连接的设备：断开所有，断开某个指定的设备，获取指定的设备等
+4. 封装一些常用的关于二进制数据与字符串互转的方法，方便新手使用
+5. 外设对象能封装基本的通讯方法，适合【发请求-等待回应】串口型的通讯协议
 
--------
+## 三. 如何导入（以下三选一）
+### 1.直接拷贝源代码
+将SimpleBLEKit文件夹整个加入到你的工程里，这个方式你可以自己再根据自己的需要修改代码
+### 2.直接拷贝SimpleBLEKit.framework加入到你的工程里
+直接引入SDK工程生成的SimpleBLEKit.framework
 
-再者，新手一开始编程蓝牙，一堆delegate还是有点怵。 之前也想过用一下BabyBuletooth的框架，不过一上手，发现学习入门的成本还是比较高。而对于新手，我认为SDK应该越简单越好。哪怕功能不全面。先把通讯调通才是新手的第一紧急任务。慢慢地后续有了比较多的理解，可以根据更复杂的业务去修改SDK源代码。
+> 注意：以上两种方式都需要在build Paases中添加coreBluetooth.framework。如果是ios10以上的版本，info.plist还需要添加关于蓝牙使用的声明Privacy - Bluetooth Peripheral Usage Description。如果要使能后台模式，在工程的 Capacities--Background Modes中选择Uses Bluetooth LE accessory  
 
+### 3.CocoaPods导入(我还没有搞，后续支持)
 
-## 三. 优点
-1. 简单，只涉及两个对象。
-2. 能够同时连接多个设备，互不影响各自的通讯。
-2. 可以管理所有已经连接的设备，目前只支持断开所有设备
-3. 提供一些处理NSData的静态方法，方便新手使用，具体看BLEManager.h的静态方法说明
-4. 非常适合【请求-回应】串口型通讯协议的开发者使用
 ## 四. 调用流程说明
 
 
-### （1）最简单流程举例:
-* **在需要用到BLEManager的地方导入**
-
-```
-#import <SimpleBLEKit/BLEManager.h>
-```
+### （1）流程举例:
+流程1：
+搜索-->连接-->设定外设通讯协议-->和外设通讯-->断开连接
 
 * **在AppDelegate.m中调用一次**
 
 ```
-[[BLEManager getInstance] setIsLogOn:YES];//初始化
+[[BLEManager getInstance] setIsLogOn:YES];//初始化顺便设置一下log是否显示在xcode里
 ```
 
-* **在需要用到SimplePeripheral导入**
+* **1. 执行搜索功能，上报外设对象给上层app**
+
+
 
 ```
-#import <SimpleBLEKit/SimplePeripheral.h>
-```
+[[BLEManager getInstance] stopScan];//搜索前先停止之前的搜索
 
-* **执行搜索功能，上报外设对象给上层app**
+[[BLEManager getInstance] startScan:^(SimplePeripheral * _Nonnull peripheral) 
+{        
+        //搜索到设备走这个block
+        } nameFilter:nil  timeout:10];
 
-```
-[[BLEManager getInstance] stopScan];
-
-[[BLEManager getInstance] startScan:^(SimplePeripheral *peripheral) {
-    //可以显示搜索到的外设对象名称
-    [peripheral getPeripheralName];           
-} timeout:-1];//-1表示一直搜索，如果设置为10，表示10s后停止搜索
 ```
 
 
-* **开始连接**
+* **2. 开始连接**
 
 ```
-    __weak typeof(self) weakself = self;
-    
     [[BLEManager getInstance] connectDevice:_selectedPeripheral callback:^(BOOL isPrepareToCommunicate) {
         
         NSLog(@"设备连接%@",isPrepareToCommunicate?@"成功":@"失败");
         
-        [weakself.connectOrDisconnect setTitle:isPrepareToCommunicate?@"断开设备":@"连接设备" forState:UIControlStateNormal];
-        weakself.connectOrDisconnect.tag = isPrepareToCommunicate?1:0;
     }];
 
 ```
 
-* **设置收包规则**
+* **3. 设置收包规则**
 
 比如你调试的通讯协议中，认为字节个数达到30，数据就收全，那你可以这么做:
 
@@ -125,93 +118,57 @@ iphone demo：
 
 
 
-* **发送接收数据**
+* **4. 发送接收数据**
 
-
-经典用法:
 
 ```
 
-[_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:5.5 receiveData:^(NSData * _Nullable outData, NSString * _Nullable error) {
+[_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:5.5 receiveData:^(NSData * _Nullable outData, NSError * _Nullable error) {
         
         if(error){
             //发生超时错误
         }else{
-            //根据你之前设置的收包规则，这里会收到一个完整包数据。自己解析数据的含义
+            //根据你之前设置的收包规则，这里会收到一个完整包数据。在这里解析数据的含义
         }
     }];
-    
+
 ```
-*其他用法*:
-1. 只发送
-    `-(BOOL)sendData:(NSData * _Nonnull)data withWC:(NSString* _Nonnull)writeUUIDString;`
-2. 发送接收(同步方法)
-   `-(NSData *_Nullable)sendData:(NSData * _Nonnull)data
-                          withWC:(NSString* _Nonnull)writeUUIDString
-                          withNC:(NSString* _Nonnull)notifyUUIDString
-                         timeout:(double)timeInterval;`
 
 * **断开连接**
 
 ```
-[_selectedPeripheral disconnect];
+[[BLEManager getInstance] isconnect:_selectedPeripheral];
 ```
 
-*以上就是完整的通讯流程* 
+
+* **其他**
+
+  如果想实现直接连接某些特定设备，也可以直接调用下面的方法，它可以直接连接符合蓝牙名称的设备
+  
+
+```[[BLEManager getInstance] scanAndConnected:@[@"Dual-SPP",@"iKG",@"K200"] callback:^(SimplePeripheral * _Nonnull peripheral, BOOL isPrepareToCommunicate) {    NSLog(@"%@",[peripheral getPeripheralName]);}];
+
+```
+  
+  
+
+*以上就是一个简单的完整流程* 
 
 
 -------
 
 
 
-## 五. 其他接口
-
-
-```
-//蓝牙名称
--(NSString* _Nonnull)getPeripheralName;
-//查询是否已连接
--(BOOL)isConnected;
-//是否打开日志打印，默认是NO
--(void)setIsLog:(BOOL)isLog;
-//是否断开后自动重连，默认是NO
--(void)setIsAutoReconnect:(BOOL)isAutoReconnect;
-//设置写数据的通知类型,默认是CBCharacteristicWriteWithoutResponse
--(void)setResponseType:(CBCharacteristicWriteType)ResponseType;
-//设置是否分包发送。大于0，则按照数值分包。小于0，则不分包。默认是不分包
--(void)setMTU:(int)MTU;
-//设置是否收到数据后回给蓝牙设备应答数据，自定义应答数据和应答规则。默认不应答
--(void)setAckData:(NSData* _Nullable)data withWC:(NSString * _Nullable)writeUUIDString
- withACKEvaluator:(NeekAckEvaluator _Nullable)ackEvaluator;
-
-//自己写的简略收包完整性验证方法，设置收到的前缀和后缀，以及整个数据包的长度
--(void)setResponseMatch:(NSString* _Nonnull)prefixString
-           sufferString:(NSString* _Nonnull)sufferString
-     NSDataExpectLength:(int)expectLen;
-
-
-```
-
-
 ## 六. 注意事项
 
-* 在AppDelegate中初始化BLEManager对象。
-* 听说BLE最多连接7个外设，没测试
-* 导入工程直接拷贝生成的framework就可以了。 如果需要模拟器版本和真机版本合并。请看framework工程中的CreateFrameWork.txt
+* 建议在AppDelegate中初始化BLEManager对象
+* 听说BLE最多连接7个外设，我也没有办法测试
+* 如果需要模拟器版本和真机版本合并。请看framework工程中的CreateFrameWork.txt
 * 支持后台通讯，只要你的info.plist声明使用BLE后台模式
 * 读取广播数据啥的，RSS啥的，我都不用，目前为止没用过，要用自己实现在外设里面。
-* 对于类似蓝牙设备不断主动推数据给ios的通讯方式，而不是发请求-回数据的方式，SDK没有写，你可以在SDK里自己实现方法
 * 只支持中央模式，不支持ios模拟为外设的模式。
 * 此SDK不考虑多个指令并发的情况。比如我们的设备，每次都只响应一个指令，如果它还在工作中，你马上给它发下一个工作指令，它可能不会响应，除了一些取消操作指令，重置指令。所以假如你需要多个指令同时发送和接收数据，同一个notify特征应该会很难解析数据，而如果硬件支持使用不同的notify特征来接收数据的话，并且确实支持同时应答多个指令，SDK是支持同时发送接收多个指令的，互不影响。
 
-## 七. 我自己怎么用这个SDK的。
-目前公司的工程我已经使用这个SDK，三款不同的蓝牙设备工作正常。
-不过我为了更方便使用它。我对
-`-(void)connectDevice:(SimplePeripheral *)simplePeripheral callback:(BLEStatusBlock _Nullable)myStatusBlock`
-的连接方法，通过判断蓝牙名称，然后对三款不同的设备分别设置收包规则，MTU，应答规则等，再去调用外设的连接方法。再者把通讯方法再封装一次，毕竟每次发送接收都要写uuid很是麻烦，而确定的硬件这些值都是不变。
+## 七. 更多使用方法见WiKi
 
-那以后假如要增加一个蓝牙设备，我只需增加连接方法中的名称判断后的分支，以便设置新的MTU,收包规则等。
-
-
-## 最后欢迎大家拍砖给建议。我邮箱: bill_zbh@163.com
 
