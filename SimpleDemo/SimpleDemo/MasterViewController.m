@@ -65,10 +65,6 @@
 
 -(void)searchBLE:(id)sender{
     [self startSearch];
-//   测试直接连接符合蓝牙名称的接口
-//    [[BLEManager getInstance] scanAndConnected:@[@"JXNX-SHFL-021504"] callback:^(SimplePeripheral * _Nonnull peripheral, BOOL isPrepareToCommunicate) {
-//        NSLog(@"%@",[peripheral getPeripheralName]);
-//    }];
 }
 
 -(void)startSearch{
@@ -140,22 +136,6 @@
     cell.accessoryType = [object isConnected]?UITableViewCellAccessoryCheckmark:UITableViewCellAccessoryNone;
     return cell;
 }
-
-
-//- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-//    // Return NO if you do not want the specified item to be editable.
-//    return YES;
-//}
-
-
-//- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath {
-//    if (editingStyle == UITableViewCellEditingStyleDelete) {
-//        [self.objects removeObjectAtIndex:indexPath.row];
-//        [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
-//    } else if (editingStyle == UITableViewCellEditingStyleInsert) {
-//        // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view.
-//    }
-//}
 
 
 @end

@@ -14,11 +14,12 @@
 @property (assign,nonatomic)  BOOL                      isAutoReconnect;
 
 #pragma mark - framework内部使用的方法
+//持有CBCentralManager
 - (instancetype _Nonnull)initWithCentralManager:(CBCentralManager * _Nonnull)manager;
-
 //连接设备
 -(void)connectDevice:(BLEStatusBlock _Nullable)myStatusBlock;
-
+//断开连接
+-(void)disconnect;
 
 
 

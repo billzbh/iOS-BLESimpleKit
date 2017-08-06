@@ -11,7 +11,7 @@
 #import <ExternalAccessory/ExternalAccessory.h>
 #import <CoreFoundation/CFByteOrder.h>
 
-#define BLE_SDK_VERSION @"20170806_V1.0"
+#define BLE_SDK_VERSION @"20170806_LAST_COMMIT=11748d3"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -166,10 +166,9 @@
 }
 
 
--(void)disconnectAll{
-    
-    for (NSString *key in _ConnectDevice_dict) {
-        SimplePeripheral *peripheral = _Device_dict[key];
+-(void)disconnect:(SimplePeripheral * _Nonnull)peripheral{
+
+    if([peripheral isConnected]){
         [peripheral disconnect];
     }
 }
@@ -192,6 +191,14 @@
         if ([peripheral isConnected] && [uuidString isEqualToString:uuid]){
             [peripheral disconnect];
         }
+    }
+}
+
+-(void)disconnectAll{
+    
+    for (NSString *key in _ConnectDevice_dict) {
+        SimplePeripheral *peripheral = _Device_dict[key];
+        [peripheral disconnect];
     }
 }
 

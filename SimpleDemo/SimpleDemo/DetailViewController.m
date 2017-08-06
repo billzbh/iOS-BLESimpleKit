@@ -49,7 +49,7 @@
     
     [[BLEManager getInstance] stopScan];
     if(self.connectOrDisconnect.tag == 1){
-        [_selectedPeripheral disconnect];
+        [[BLEManager getInstance] disconnect:_selectedPeripheral];
         [_autoConnectSwitch setOn:NO];
         return;
     }

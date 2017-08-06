@@ -54,8 +54,6 @@
 -(NSString* _Nonnull)getPeripheralName;
 //查询是否已连接
 -(BOOL)isConnected;
-//断开连接
--(void)disconnect;
 
 #pragma mark 其他方法
 //读取特征的描述文字，请在连接前调用setIsReadDescriptors:使能后才能使用这个接口
