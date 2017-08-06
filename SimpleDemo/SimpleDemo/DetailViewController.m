@@ -67,12 +67,8 @@
         return NO;
     }];
     //加快搜索服务和特征速度，间接加快连接速度.
-//    [_selectedPeripheral setServiceAndCharacteristicsDictionary:@{serviceuuid:@[writeuuid,notifyuuid]}];
-    [_selectedPeripheral setServiceAndCharacteristicsDictionary:nil];
-    //其他可选设置
-//    [_selectedPeripheral setIsLog:NO];
-//    [_selectedPeripheral setMTU:20];
-//    [_selectedPeripheral setResponseType:CBCharacteristicWriteWithoutResponse];
+    [_selectedPeripheral setServiceAndCharacteristicsDictionary:@{serviceuuid:@[writeuuid,notifyuuid]}];
+
     //发起连接前，对外设做各项设置(可选) === end ===
     
     
