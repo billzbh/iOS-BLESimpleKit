@@ -26,7 +26,6 @@
     
     UIBarButtonItem *addButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSearch target:self action:@selector(searchBLE:)];
     self.navigationItem.rightBarButtonItem = addButton;
-    self.detailViewController = (DetailViewController *)[[self.splitViewController.viewControllers lastObject] topViewController];
     
     [self startSearch];
 }
@@ -136,6 +135,18 @@
 #pragma mark - 连接蓝牙的delegate
 - (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral{
     [self.tableView reloadData];
+    
+    DetailViewController *detailViewController = (DetailViewController *)[[self.splitViewController.viewControllers lastObject] topViewController];
+
+    if (isConnected) {
+        NSLog(@"应用层得到设备连接成功的通知\n");
+        [detailViewController.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
+        detailViewController.connectOrDisconnect.tag = 1;
+    }else{
+        NSLog(@"应用层得到设备连接失败的通知\n");
+        [detailViewController.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
+        detailViewController.connectOrDisconnect.tag = 0;
+    }
 }
 
 

@@ -304,9 +304,6 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-
-    //设置delegate
-    [[BLEManager getInstance] setStatusDelegate:self];
     
     // Do any additional setup after loading the view, typically from a nib.
     self.sendHexString.delegate = self;
@@ -331,20 +328,6 @@
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
-}
-
-
-#pragma mark 蓝牙连接状态的通知
-- (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral{
-    if (isConnected) {
-        NSLog(@"应用层得到设备连接成功的通知\n");
-        [self.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
-        self.connectOrDisconnect.tag = 1;
-    }else{
-        NSLog(@"应用层得到设备连接失败的通知\n");
-        [self.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
-        self.connectOrDisconnect.tag = 0;
-    }
 }
 
 @end

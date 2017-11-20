@@ -8,12 +8,8 @@
 
 #import <UIKit/UIKit.h>
 #import <SimpleBLEKit/SimplePeripheral.h>
-@class DetailViewController;
 
 @interface MasterViewController : UITableViewController
 
-@property (strong, nonatomic) DetailViewController *detailViewController;
-
--(void)connectStatus;
 @end
 
