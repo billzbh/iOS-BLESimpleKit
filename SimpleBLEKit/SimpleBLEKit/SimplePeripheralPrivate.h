@@ -22,8 +22,6 @@
 //断开连接
 -(void)disconnect;
 
-
-
 - (void) centralManager:(CBCentralManager *_Nonnull)central didDisconnectPeripheral:(CBPeripheral *_Nonnull)peripheral
                   error:(NSError *_Nullable)error;
 - (void)centralManager:(CBCentralManager *_Nonnull)central didConnectPeripheral:(CBPeripheral *_Nonnull)peripheral;

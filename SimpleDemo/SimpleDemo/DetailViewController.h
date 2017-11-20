@@ -13,7 +13,6 @@
 @interface DetailViewController : UIViewController
 
 @property (strong, nonatomic) SimplePeripheral *selectedPeripheral;
-@property (weak,nonatomic) MasterViewController *weakMasterself;
 
 @property (weak, nonatomic) IBOutlet UITextField *serviceUuid;
 @property (weak, nonatomic) IBOutlet UITextField *notifyUuid;

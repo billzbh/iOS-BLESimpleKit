@@ -78,18 +78,13 @@
         [self.tableView reloadData];
     }
     
+    [[BLEManager getInstance] setStatusDelegate:self];
     [[BLEManager getInstance] stopScan];
     
     //参数是设备内的serviceuuid其中一个，不是CBPeripheral的identifier
 //    [[BLEManager getInstance] setScanServiceUUIDs:@[@"FFF0",@"18F0",@"180A"]];
-    [[BLEManager getInstance] startScan:^(SimplePeripheral * _Nonnull peripheral) {
-        
-        if([self.objects containsObject:peripheral])
-            return;
-        [self.objects insertObject:peripheral atIndex:0];
-        NSIndexPath *indexPath = [NSIndexPath indexPathForRow:0 inSection:0];
-        [self.tableView insertRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
-    } nameFilter:nil/*@[@"iMate",@"K203",@"HxBluetooth",@"JXNX"]*/  timeout:4];
+    
+    [[BLEManager getInstance] startScanByNameFilter:nil/*@[@"iMate",@"K203",@"HxBluetooth",@"JXNX"]*/ timeout:4];
 }
 
 
@@ -101,22 +96,10 @@
         
         SimplePeripheral *object = self.objects[indexPath.row];
         DetailViewController *controller = (DetailViewController *)[[segue destinationViewController] topViewController];
-        [controller setWeakMasterself:self];
         [controller setSelectedPeripheral:object];
-        
         controller.navigationItem.leftBarButtonItem = self.splitViewController.displayModeButtonItem;
         controller.navigationItem.leftItemsSupplementBackButton = YES;
     }
-}
-
--(void)connectStatus
-{
-
-    DetailViewController *controller = (DetailViewController *)[[self.splitViewController.viewControllers lastObject] topViewController];
-    [controller.connectOrDisconnect setTitle:[controller.selectedPeripheral isConnected]?@"断开设备":@"连接设备" forState:UIControlStateNormal];
-    controller.connectOrDisconnect.tag = [controller.selectedPeripheral isConnected]?1:0;
-    
-    [self.tableView reloadData];
 }
 
 #pragma mark - Table View
@@ -139,6 +122,22 @@
     cell.accessoryType = [object isConnected]?UITableViewCellAccessoryCheckmark:UITableViewCellAccessoryNone;
     return cell;
 }
+
+
+#pragma mark - 搜索蓝牙的delegate
+- (void)searchBLEPeripheral:(SimplePeripheral * _Nonnull)peripheral{
+    if([self.objects containsObject:peripheral])
+        return;
+    [self.objects insertObject:peripheral atIndex:0];
+    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:0 inSection:0];
+    [self.tableView insertRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+}
+
+#pragma mark - 连接蓝牙的delegate
+- (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral{
+    [self.tableView reloadData];
+}
+
 
 
 @end

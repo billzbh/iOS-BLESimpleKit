@@ -16,6 +16,7 @@
 // 当外设蓝牙和ios连接成功或者中断时，该方法被调用，通知目前的蓝牙连接状态
 - (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral;
 
+- (void)searchBLEPeripheral:(SimplePeripheral * _Nonnull)peripheral;
 @end
 
 @interface BLEManager : NSObject
@@ -40,8 +41,7 @@
 -(void)setScanServiceUUIDs:(NSArray<NSString *>* _Nullable)services;
 
 //只搜索符合名称过滤规则的蓝牙设备
--(void)startScan:(SearchBlock _Nonnull)searchBLEBlock
-      nameFilter:(NSArray<NSString *>*_Nullable)nameFilters
+-(void)startScanByNameFilter:(NSArray<NSString *>*_Nullable)nameFilters
          timeout:(NSTimeInterval)interval;
 
 //停止搜索

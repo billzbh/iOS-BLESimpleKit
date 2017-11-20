@@ -10,7 +10,7 @@
 #import "SimplePeripheralPrivate.h"
 #import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20171010_LAST_COMMIT=c493fdb"
+#define BLE_SDK_VERSION @"20171120_LAST_COMMIT=dd1b779"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -198,6 +198,95 @@
 }
 
 //搜索符合过滤名称的设备
+-(void)startScanByNameFilter:(NSArray<NSString *>*)nameFilters
+                     timeout:(NSTimeInterval)interval
+{
+    if(_centralManager.state!=5){
+        if(_isLogOn) NSLog(@"蓝牙状态异常，请打开蓝牙");
+        return;
+    }
+    
+    _MysearchBLEBlock = nil;
+    _FilterBleNameArray = nameFilters;
+    _centralManager.delegate = self;
+    if (_searchedDeviceUUIDArray==nil) {
+        _searchedDeviceUUIDArray = [[NSMutableDictionary alloc] init];
+    }else{
+        [_searchedDeviceUUIDArray removeAllObjects];
+    }
+    
+    if(_isLogOn) NSLog(@"搜索前，上报设备池中已连接的外设...");
+    //将已经连接的设备也上报
+    __weak typeof(self) weakself = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(self) strongself = weakself;
+        for (NSString *key in strongself.Device_dict) {
+            SimplePeripheral *peripheral = strongself.Device_dict[key];
+            if ([peripheral isConnected]) {
+                if(strongself.isLogOn) NSLog(@"└┈上报%@",[peripheral getPeripheralName]);
+                if ( [strongself.statusDelegate respondsToSelector:@selector(searchBLEPeripheral:)] )
+                    [strongself.statusDelegate searchBLEPeripheral:peripheral];
+            }
+        }
+    });
+    
+    //上报系统中别的app已经连接的,但此对象_centralManager还未连接的蓝牙设备
+    if ([_services count]>0) {
+        
+        //retrieveConnectedPeripheralsWithServices 在已连接列表中取回符合的对象
+        NSArray<CBPeripheral *>* connectPeripherals = [_centralManager retrieveConnectedPeripheralsWithServices:_services];
+        
+        if(_isLogOn) NSLog(@"搜索前，上报其他app已连接的设备...");
+        SimplePeripheral *tmpPeripheral;
+        for (CBPeripheral *cbP in connectPeripherals) {
+            if(_FilterBleNameArray!=nil){
+                int i = 0;
+                for (NSString* name in _FilterBleNameArray) {
+                    if([cbP.name containsString:name])
+                        break;
+                    i++;
+                }
+                if (i==[_FilterBleNameArray count]) {
+                    continue;
+                }
+            }
+            
+            if(cbP.state==CBPeripheralStateDisconnected){
+                if(_isLogOn) NSLog(@"└┈上报:%@",cbP.name);
+                tmpPeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
+                [tmpPeripheral setPeripheral:cbP];
+                [_Device_dict setValue:tmpPeripheral forKey:[cbP.identifier UUIDString]];
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    __strong typeof(self) strongself = weakself;
+                    if ( [strongself.statusDelegate respondsToSelector:@selector(searchBLEPeripheral:)] ){
+                        [strongself.statusDelegate searchBLEPeripheral:tmpPeripheral];
+                    }
+                });
+            }
+        }
+    }
+    
+    if (interval>0) {
+        _scanTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:NO block:^(NSTimer * _Nonnull timer) {
+            __strong typeof(self) strongself = weakself;
+            if(strongself.isLogOn) NSLog(@"定时器触发停止搜索");
+            [strongself stopScan];
+        }];
+    }
+    if(_isLogOn) {
+        NSString *str = [NSString stringWithFormat:@",%f秒后自动停止搜索",interval];
+        NSLog(@"开始搜索%@",interval>0?str:@"");
+    }
+    
+    if([_services count]>0){
+        [self.centralManager scanForPeripheralsWithServices:_services options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@NO}];
+    }else{
+        [self.centralManager scanForPeripheralsWithServices:nil options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@NO}];
+    }
+}
+
+//搜索符合过滤名称的设备 block方式
 -(void)startScan:(SearchBlock)searchBLEBlock nameFilter:(NSArray<NSString *>*)nameFilters
          timeout:(NSTimeInterval)interval
 {
@@ -219,18 +308,17 @@
     //将已经连接的设备也上报
     __weak typeof(self) weakself = self;
     dispatch_async(dispatch_get_main_queue(), ^{
-        for (NSString *key in weakself.Device_dict) {
-            
-            SimplePeripheral *peripheral = weakself.Device_dict[key];
+        __strong typeof(self) strongself=weakself;
+        for (NSString *key in strongself.Device_dict) {
+            SimplePeripheral *peripheral = strongself.Device_dict[key];
             if ([peripheral isConnected]) {
-                if(_isLogOn) NSLog(@"└┈上报%@",[peripheral getPeripheralName]);
-                if (weakself.MysearchBLEBlock) {
-                    weakself.MysearchBLEBlock(peripheral);
+                if(strongself.isLogOn) NSLog(@"└┈上报%@",[peripheral getPeripheralName]);
+                if (strongself.MysearchBLEBlock) {
+                    strongself.MysearchBLEBlock(peripheral);
                 }
             }
         }
     });
-    
     
     //上报系统中别的app已经连接的,但此对象_centralManager还未连接的蓝牙设备
     if ([_services count]>0) {
@@ -238,10 +326,9 @@
         //retrieveConnectedPeripheralsWithServices 在已连接列表中取回符合的对象
         NSArray<CBPeripheral *>* connectPeripherals = [_centralManager retrieveConnectedPeripheralsWithServices:_services];
         
-        
+        if(_isLogOn) NSLog(@"搜索前，上报其他app已连接的外设...");
         SimplePeripheral *tmpPeripheral;
         for (CBPeripheral *cbP in connectPeripherals) {
-            if(_isLogOn) NSLog(@"└┈搜索到其他app已连接的设备:%@(上报应用层)",cbP.name);
             if(_FilterBleNameArray!=nil){
                 int i = 0;
                 for (NSString* name in _FilterBleNameArray) {
@@ -255,14 +342,16 @@
             }
             
             if(cbP.state==CBPeripheralStateDisconnected){
+                
+                if(_isLogOn) NSLog(@"└┈上报%@",cbP.name);
                 tmpPeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
                 [tmpPeripheral setPeripheral:cbP];
                 [_Device_dict setValue:tmpPeripheral forKey:[cbP.identifier UUIDString]];
 
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    
-                    if (weakself.MysearchBLEBlock) {
-                        weakself.MysearchBLEBlock(tmpPeripheral);
+                    __strong typeof(self) strongself=weakself;
+                    if (strongself.MysearchBLEBlock) {
+                        strongself.MysearchBLEBlock(tmpPeripheral);
                     }
                 });
             }
@@ -271,8 +360,9 @@
     
     if (interval>0) {
         _scanTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:NO block:^(NSTimer * _Nonnull timer) {
-            if(_isLogOn) NSLog(@"定时器触发停止搜索");
-            [weakself stopScan];
+            __strong typeof(self) strongself=weakself;
+            if(strongself.isLogOn) NSLog(@"定时器触发停止搜索");
+            [strongself stopScan];
         }];
     }
     if(_isLogOn) {
@@ -298,13 +388,11 @@
 }
 
 
-//合并 startSearch 和 connectDevice 方法。直接连接符合蓝牙名称的设备
+//合并 startSearch 和 connectDevice 方法。直接连接符合蓝牙名称的多个设备
 -(void)scanAndConnected:(NSArray<NSString *>*)btNameArray
 {
     [self startScan:^(SimplePeripheral * _Nonnull peripheral) {
-        if ([btNameArray containsObject:[peripheral getPeripheralName]]) {
-            [peripheral connectDevice];
-        }
+        [peripheral connectDevice];
     } nameFilter:btNameArray timeout:2*btNameArray.count+2];
 }
 
@@ -396,8 +484,12 @@
     [simplePeripheral setPeripheral:peripheral];
     dispatch_async(dispatch_get_main_queue(), ^{
         
-        if (weakself.MysearchBLEBlock) {
-            weakself.MysearchBLEBlock(simplePeripheral);
+        __strong typeof(self) strongself = weakself;
+        if ( [strongself.statusDelegate respondsToSelector:@selector(searchBLEPeripheral:)] ){
+            [strongself.statusDelegate searchBLEPeripheral:simplePeripheral];
+        }
+        if (strongself.MysearchBLEBlock) {
+            strongself.MysearchBLEBlock(simplePeripheral);
         }
     });
 }
