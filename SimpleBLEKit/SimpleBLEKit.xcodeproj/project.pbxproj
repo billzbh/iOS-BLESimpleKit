@@ -17,13 +17,11 @@
 		2521B7361E77FE520071D714 /* DataDescription.h in Headers */ = {isa = PBXBuildFile; fileRef = 2521B7341E77FE520071D714 /* DataDescription.h */; };
 		2521B7371E77FE520071D714 /* DataDescription.m in Sources */ = {isa = PBXBuildFile; fileRef = 2521B7351E77FE520071D714 /* DataDescription.m */; };
 		2521B7391E78F9A50071D714 /* SimpleBLEKitTypeDef.h in Headers */ = {isa = PBXBuildFile; fileRef = 2521B7381E78F9A50071D714 /* SimpleBLEKitTypeDef.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		2521B78B1E7973A50071D714 /* CreateFrameWork.txt in Resources */ = {isa = PBXBuildFile; fileRef = 2521B78A1E7973A50071D714 /* CreateFrameWork.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		251A95E71E7CDD620095BCED /* SimplePeripheralPrivate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SimplePeripheralPrivate.h; sourceTree = "<group>"; };
 		2521B71B1E77AC860071D714 /* SimpleBLEKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SimpleBLEKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		2521B71F1E77AC860071D714 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2521B7271E77ACC20071D714 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		2521B7291E77ACCA0071D714 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		2521B72B1E77AD770071D714 /* BLEManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BLEManager.h; sourceTree = "<group>"; };
@@ -33,7 +31,6 @@
 		2521B7341E77FE520071D714 /* DataDescription.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DataDescription.h; sourceTree = "<group>"; };
 		2521B7351E77FE520071D714 /* DataDescription.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DataDescription.m; sourceTree = "<group>"; };
 		2521B7381E78F9A50071D714 /* SimpleBLEKitTypeDef.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SimpleBLEKitTypeDef.h; sourceTree = "<group>"; };
-		2521B78A1E7973A50071D714 /* CreateFrameWork.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = CreateFrameWork.txt; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,16 +66,14 @@
 		2521B71D1E77AC860071D714 /* SimpleBLEKit */ = {
 			isa = PBXGroup;
 			children = (
-				2521B78A1E7973A50071D714 /* CreateFrameWork.txt */,
-				2521B71F1E77AC860071D714 /* Info.plist */,
+				251A95E71E7CDD620095BCED /* SimplePeripheralPrivate.h */,
+				2521B7381E78F9A50071D714 /* SimpleBLEKitTypeDef.h */,
 				2521B72B1E77AD770071D714 /* BLEManager.h */,
 				2521B72C1E77AD770071D714 /* BLEManager.m */,
 				2521B72F1E77B1AE0071D714 /* SimplePeripheral.h */,
-				251A95E71E7CDD620095BCED /* SimplePeripheralPrivate.h */,
 				2521B7301E77B1AE0071D714 /* SimplePeripheral.m */,
 				2521B7341E77FE520071D714 /* DataDescription.h */,
 				2521B7351E77FE520071D714 /* DataDescription.m */,
-				2521B7381E78F9A50071D714 /* SimpleBLEKitTypeDef.h */,
 			);
 			path = SimpleBLEKit;
 			sourceTree = "<group>";
@@ -167,7 +162,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2521B78B1E7973A50071D714 /* CreateFrameWork.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

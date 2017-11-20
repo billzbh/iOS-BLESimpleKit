@@ -67,12 +67,8 @@
         return NO;
     }];
     //加快搜索服务和特征速度，间接加快连接速度.
-//    [_selectedPeripheral setServiceAndCharacteristicsDictionary:@{serviceuuid:@[writeuuid,notifyuuid]}];
     [_selectedPeripheral setServiceAndCharacteristicsDictionary:nil];
-    //其他可选设置
-//    [_selectedPeripheral setIsLog:NO];
-//    [_selectedPeripheral setMTU:20];
-//    [_selectedPeripheral setResponseType:CBCharacteristicWriteWithoutResponse];
+
     //发起连接前，对外设做各项设置(可选) === end ===
     
     
@@ -135,15 +131,7 @@
         return YES;
     }];
     //开始连接
-    __weak typeof(self) weakself = self;
-    
-    [[BLEManager getInstance] connectDevice:_selectedPeripheral callback:^(BOOL isPrepareToCommunicate) {
-        NSLog(@"设备连接%@\n",isPrepareToCommunicate?@"成功":@"失败");
-        
-        [weakself.connectOrDisconnect setTitle:isPrepareToCommunicate?@"断开设备":@"连接设备" forState:UIControlStateNormal];
-        weakself.connectOrDisconnect.tag = isPrepareToCommunicate?1:0;
-        [_weakMasterself connectStatus];
-    }];
+    [[BLEManager getInstance] connectDevice:_selectedPeripheral];
 }
 
 
@@ -165,11 +153,10 @@
     
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSDictionary *dict = [_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:15];
+        NSDictionary *dict = [_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:20];
         NSString *out = [NSString stringWithFormat:@"%@,包完整数据:\n%@\n",dict[@"error"],dict[@"data"]];
         [self showLogMessage:out];
     });
-    
 //    [_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:100 receiveData:^(NSData * _Nullable outData, NSError * _Nullable error) {
 //        
 //        if(error){
@@ -319,6 +306,10 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+
+    //设置delegate
+    [[BLEManager getInstance] setStatusDelegate:self];
+    
     // Do any additional setup after loading the view, typically from a nib.
     self.sendHexString.delegate = self;
     self.regularExp.delegate = self;
@@ -342,7 +333,22 @@
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
+}
+
+
+#pragma mark 蓝牙连接状态的通知
+- (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral{
+    if (isConnected) {
+        NSLog(@"应用层得到设备连接成功的通知\n");
+        [self.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
+        self.connectOrDisconnect.tag = 1;
+        [_weakMasterself connectStatus];
+    }else{
+        NSLog(@"应用层得到设备连接失败的通知\n");
+        [self.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
+        self.connectOrDisconnect.tag = 0;
+        [_weakMasterself connectStatus];
+    }
 }
 
 @end

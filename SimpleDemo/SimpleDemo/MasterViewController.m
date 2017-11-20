@@ -51,6 +51,9 @@
     //取消按钮
     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
         
+        //模拟程序在后台被挂起
+        kill(getpid(), SIGKILL);//SIGHUP
+        
     }];
     [alertController addAction:cancelAction];
     //确定按钮
@@ -78,7 +81,7 @@
     [[BLEManager getInstance] stopScan];
     
     //参数是设备内的serviceuuid其中一个，不是CBPeripheral的identifier
-    [[BLEManager getInstance] setScanServiceUUIDs:@[@"FFF0",@"18F0",@"180A"]];
+//    [[BLEManager getInstance] setScanServiceUUIDs:@[@"FFF0",@"18F0",@"180A"]];
     [[BLEManager getInstance] startScan:^(SimplePeripheral * _Nonnull peripheral) {
         
         if([self.objects containsObject:peripheral])

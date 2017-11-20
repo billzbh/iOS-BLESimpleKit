@@ -30,7 +30,7 @@
 -(BOOL)sendData:(NSData * _Nonnull)data withWC:(NSString* _Nonnull)writeUUIDString;
 
 //发送接收(同步),返回的字典包含"data"和"error"字段
--(NSDictionary *_Nullable)sendData:(NSData * _Nonnull)data
+-(NSDictionary *_Nonnull)sendData:(NSData * _Nonnull)data
                             withWC:(NSString* _Nonnull)writeUUIDString
                             withNC:(NSString* _Nonnull)notifyUUIDString
                            timeout:(double)timeInterval;
@@ -45,8 +45,16 @@
 #pragma mark 只订阅通知，不发送数据
 //开始不断监听数据更新
 -(void)startListenWithNC:(NSString* _Nonnull)notifyUUIDString updateDataBlock:(updateDataBlock _Nullable)callback;
-//停止监听数据更新 (如果想用发送接收方法，刚好notify的UUID和这个一样，需要停止监听)
+//停止监听数据更新
 -(void)stopListenwithNC:(NSString* _Nonnull)notifyUUIDString;
+
+#pragma mark 间隔时间内读取一次当前的RSSI值
+//timeInterval <=0                        直接读取RSSI
+//timeInterval > 0                        直接读取一次RSSI，延迟timeInterval秒后再次读取一次RSSI
+//timeInterval > 0 && isRepeat==YES       直接读取一次RSSI，直接每间隔timeInterval秒后再次读取一次RSSI
+-(void)readRSSI:(double)timeInterval repeats:(BOOL)isRepeat callback:(readRSSIBlock _Nonnull)callback;
+//对应 readRSSI，如果启动间隔方式读取RSSI，不需要的时候取消定时器
+-(void)cancelReadRSSITimer;
 
 
 #pragma mark - 常用方法
@@ -55,16 +63,10 @@
 //查询是否已连接
 -(BOOL)isConnected;
 
-#pragma mark 其他方法
-//读取特征的描述文字，请在连接前调用setIsReadDescriptors:使能后才能使用这个接口
--(NSString *_Nullable)readCharacteristicsDescriptors:(NSString * _Nonnull)characteristicUUID;
-
 #pragma mark - 如果不需要用到相关功能，请不要设置这些方法
 //是否打开日志打印，默认是NO
 -(void)setIsLog:(BOOL)isLog;
-//设置是否连接后读取特征的描述文字
--(void)setIsReadDescriptors:(BOOL)isReadDescriptors;
-//是否断开后自动重连，默认是NO
+//是否断开后自动重连，默认是YES
 -(void)setIsAutoReconnect:(BOOL)isAutoReconnect;
 //设置写数据的通知类型,默认是CBCharacteristicWriteWithoutResponse
 -(void)setResponseType:(CBCharacteristicWriteType)ResponseType;

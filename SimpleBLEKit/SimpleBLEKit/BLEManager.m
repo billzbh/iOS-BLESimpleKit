@@ -8,10 +8,9 @@
 
 #import "BLEManager.h"
 #import "SimplePeripheralPrivate.h"
-#import <ExternalAccessory/ExternalAccessory.h>
-#import <CoreFoundation/CFByteOrder.h>
+#import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20170806_LAST_COMMIT=11748d3"
+#define BLE_SDK_VERSION @"20171010_LAST_COMMIT=c493fdb"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -24,7 +23,8 @@
 @property (strong,nonatomic) NSMutableDictionary *ConnectDevice_dict;//已连接的对象
 @property (strong, nonatomic) NSMutableDictionary  *searchedDeviceUUIDArray;
 @property (assign,nonatomic) BOOL isLogOn;
-
+@property (weak,nonatomic) id statusDelegate;
+@property (weak,nonatomic) NSTimer * scanTimer;
 @end
 
 @implementation BLEManager
@@ -37,19 +37,10 @@
     _services = [[NSMutableArray alloc] init];
     _Device_dict = [[NSMutableDictionary alloc] init];
     _ConnectDevice_dict = [[NSMutableDictionary alloc] init];
-    dispatch_queue_t _centralManagerQueue = dispatch_queue_create("com.zbh.SimpleBLEKit.centralManagerQueue", DISPATCH_QUEUE_SERIAL);
-    
-    _centralManager = [CBCentralManager alloc];
-    if ([_centralManager respondsToSelector:@selector(initWithDelegate:queue:options:)]) {
-        
-        //在蓝牙关闭时，是否提示蓝牙需要打开
-        //centralManager:willRestoreState: 中根据CBCentralManagerOptionRestoreIdentifierKey恢复CBCentralManager对象
-        _centralManager = [_centralManager initWithDelegate:self queue:_centralManagerQueue options:@{CBCentralManagerOptionShowPowerAlertKey:@YES,CBCentralManagerOptionRestoreIdentifierKey: BLE_SDK_RestoreIdentifierKey}];
-    }
-    else {
-        _centralManager = [_centralManager initWithDelegate:self queue:_centralManagerQueue];
-    }
     _isLogOn = NO;
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(myPeripheralConnected:) name:BLESTATUS_CONNECTED object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(myPeripheralDisconnected:) name:BLESTATUS_DISCONNECTED object:nil];
     return self;
 }
 
@@ -65,6 +56,7 @@
     _searchedDeviceUUIDArray = nil;
     [_services removeAllObjects];
     _services = nil;
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 
@@ -79,16 +71,63 @@
     return sharedInstance;
 }
 
--(NSString *)getSDKVersion{
-    return BLE_SDK_VERSION;
+//AppDelegate中调用
+-(void)createCentralManagerWithOption:(NSDictionary *)launchOptions{
+    
+    dispatch_queue_t _centralManagerQueue = dispatch_queue_create("com.zbh.SimpleBLEKit.centralManagerQueue", DISPATCH_QUEUE_SERIAL);
+    
+    //土办法判断是否有蓝牙后台权限
+    NSString *bunPath = [[NSBundle mainBundle] bundlePath];
+    BOOL HasBackgroundForBt = NO;
+    if(bunPath!=nil){
+        NSFileManager * manager = [NSFileManager defaultManager];
+        NSArray *pathArray = [manager subpathsAtPath:bunPath];//app目录下的所有子文件路径
+        for (NSString *path in pathArray) {
+            if ([path hasSuffix:@".plist"]) {
+                NSString * content = [NSString stringWithContentsOfFile:path encoding:NSASCIIStringEncoding error:nil];
+                if ([content containsString:@"bluetooth-central"]) {
+                    
+                    HasBackgroundForBt=YES;
+                }
+            }
+        }
+    }
+    
+    if (HasBackgroundForBt==YES) {
+        
+        if (launchOptions!=nil) {
+            NSArray *IdentifierKeyArray = launchOptions[UIApplicationLaunchOptionsBluetoothCentralsKey];
+            if (IdentifierKeyArray!=nil) {
+                for (NSString *str in IdentifierKeyArray) {
+                    if([str isEqualToString:BLE_SDK_RestoreIdentifierKey]){
+                        //重新初始化一个中央对象
+                        _centralManager = [[CBCentralManager alloc] initWithDelegate:self queue:_centralManagerQueue options:@{CBCentralManagerOptionRestoreIdentifierKey: str}];
+                    }
+                }
+            }
+            
+        }else{
+            //在蓝牙关闭时，是否提示蓝牙需要打开
+            //centralManager:willRestoreState: 中根据CBCentralManagerOptionRestoreIdentifierKey恢复CBCentralManager对象,必须打开后台模式，不然这样设置option会闪退。
+            _centralManager = [[CBCentralManager alloc] initWithDelegate:self queue:_centralManagerQueue options:@{CBCentralManagerOptionShowPowerAlertKey:@YES,CBCentralManagerOptionRestoreIdentifierKey: BLE_SDK_RestoreIdentifierKey}];
+        }
+        
+    }else{
+        
+        NSLog(@"没有蓝牙后台权限，默认方式初始化");
+        //在蓝牙关闭时，是否提示蓝牙需要打开
+        _centralManager = [[CBCentralManager alloc] initWithDelegate:self queue:_centralManagerQueue options:@{CBCentralManagerOptionShowPowerAlertKey:@YES}];
+    }
 }
 
--(void)setScanServiceUUIDs:(NSArray<NSString *>*)services
-{
-    [_services removeAllObjects];
-    for (NSString *uuid in services) {
-        [_services addObject:[CBUUID UUIDWithString:uuid]];
-    }
+//设置外设蓝牙连接状态delegate
+-(void)setStatusDelegate:(id _Nullable)delegate{
+    _statusDelegate = delegate;
+}
+
+
+-(NSString *)getSDKVersion{
+    return BLE_SDK_VERSION;
 }
 
 //如果外设名称不同，可以通过这个获取到已连接的外设
@@ -111,58 +150,6 @@
 -(NSArray<SimplePeripheral *>*)getConnectPeripherals
 {
     return [_ConnectDevice_dict allValues];
-}
-
--(void)connectDevice:(SimplePeripheral *)simplePeripheral callback:(BLEStatusBlock _Nullable)myStatusBlock
-{
-    if(_centralManager.state!=5){
-        if(_isLogOn) NSLog(@"蓝牙状态异常，请打开蓝牙");
-        return;
-    }
-    
-    //TODO
-    //如果自己公司的SDK要兼容几种不同协议的外设
-    //可以直接在这里通过不同的外设名称，区分不同的收发规则等，外部调用就不再需要设置，也不会暴露协议。
-    //还可以通过不同的外设名称，将外设对象返回给更复杂功能的对象，使得它可以利用外设的通讯方法封装更多不同的方法。
-    [simplePeripheral connectDevice:^(BOOL isPrepareToCommunicate) {
-        
-        if (isPrepareToCommunicate) {
-            [_ConnectDevice_dict setValue:simplePeripheral forKey:[simplePeripheral.peripheral.identifier UUIDString]];
-        }else{
-            [_ConnectDevice_dict removeObjectForKey:[simplePeripheral.peripheral.identifier UUIDString]];
-        }
-        myStatusBlock(isPrepareToCommunicate);
-    }];
-}
-
-
-//合并 startSearch 和 connectDevice 方法。直接连接符合蓝牙名称的设备
--(void)scanAndConnected:(NSArray<NSString *>*)btNameArray
-               callback:(searchAndConnectBlock _Nullable)multiDeviceBlock
-{
-    [self startScan:^(SimplePeripheral * _Nonnull peripheral) {
-        if ([btNameArray containsObject:[peripheral getPeripheralName]]) {
-            
-            //TODO
-            //如果自己公司的SDK要兼容几种不同协议的外设
-            //可以直接在这里通过不同的外设名称，区分不同的收发规则等，外部调用就不再需要设置，也不会暴露协议。
-            //还可以通过不同的外设名称，将外设对象返回给更复杂功能的对象，使得它可以利用外设的通讯方法封装更多不同的方法。
-//            if ([[peripheral getPeripheralName] containsString:@"JXNX"]) {
-//                [peripheral setPacketVerifyEvaluator:^BOOL(NSData * _Nullable inputData) {
-//                    return YES;
-//                }];
-//            }
-            
-            [peripheral connectDevice:^(BOOL isPrepareToCommunicate) {
-                if (isPrepareToCommunicate) {
-                    [_ConnectDevice_dict setValue:peripheral forKey:[peripheral.peripheral.identifier UUIDString]];
-                }else{
-                    [_ConnectDevice_dict removeObjectForKey:[peripheral.peripheral.identifier UUIDString]];
-                }
-                multiDeviceBlock(peripheral,isPrepareToCommunicate);
-            }];
-        }
-    } nameFilter:btNameArray timeout:2*btNameArray.count+2];
 }
 
 
@@ -202,6 +189,14 @@
     }
 }
 
+-(void)setScanServiceUUIDs:(NSArray<NSString *>*)services
+{
+    [_services removeAllObjects];
+    for (NSString *uuid in services) {
+        [_services addObject:[CBUUID UUIDWithString:uuid]];
+    }
+}
+
 //搜索符合过滤名称的设备
 -(void)startScan:(SearchBlock)searchBLEBlock nameFilter:(NSArray<NSString *>*)nameFilters
          timeout:(NSTimeInterval)interval
@@ -235,7 +230,8 @@
             }
         }
     });
-  
+    
+    
     //上报系统中别的app已经连接的,但此对象_centralManager还未连接的蓝牙设备
     if ([_services count]>0) {
         
@@ -262,7 +258,7 @@
                 tmpPeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
                 [tmpPeripheral setPeripheral:cbP];
                 [_Device_dict setValue:tmpPeripheral forKey:[cbP.identifier UUIDString]];
-                
+
                 dispatch_async(dispatch_get_main_queue(), ^{
                     
                     if (weakself.MysearchBLEBlock) {
@@ -274,10 +270,9 @@
     }
     
     if (interval>0) {
-        [NSTimer scheduledTimerWithTimeInterval:interval repeats:NO block:^(NSTimer * _Nonnull timer) {
+        _scanTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:NO block:^(NSTimer * _Nonnull timer) {
             if(_isLogOn) NSLog(@"定时器触发停止搜索");
             [weakself stopScan];
-            [timer invalidate];
         }];
     }
     if(_isLogOn) {
@@ -292,9 +287,34 @@
     }
 }
 
+
+-(void)connectDevice:(SimplePeripheral *)simplePeripheral
+{
+    if(_centralManager.state!=5){
+        if(_isLogOn) NSLog(@"蓝牙状态异常，请打开蓝牙");
+        return;
+    }
+    [simplePeripheral connectDevice];
+}
+
+
+//合并 startSearch 和 connectDevice 方法。直接连接符合蓝牙名称的设备
+-(void)scanAndConnected:(NSArray<NSString *>*)btNameArray
+{
+    [self startScan:^(SimplePeripheral * _Nonnull peripheral) {
+        if ([btNameArray containsObject:[peripheral getPeripheralName]]) {
+            [peripheral connectDevice];
+        }
+    } nameFilter:btNameArray timeout:2*btNameArray.count+2];
+}
+
+
 -(void)stopScan{
-    
     [self.centralManager stopScan];
+    if (_scanTimer!=nil && [_scanTimer isValid]) {
+        [_scanTimer invalidate];
+        _scanTimer = nil;
+    }
 }
 
 #pragma mark  - CBCentralManagerDelegate method
@@ -305,26 +325,26 @@
 {
     if (_centralManager.state==5) {//CBManagerStatePoweredOn 或者 CBCentralManagerStatePoweredOn
         if(_isLogOn) NSLog(@"本地蓝牙中央设备状态正常");
-        for (SimplePeripheral *sp in [_Device_dict allValues]) {
-            if(!sp.isConnected && sp.isAutoReconnect)//已经断开，但要求重新连接的，在这里可以重新连接。
-            {
-                if(_isLogOn) NSLog(@"准备自动重连");
-                [self.centralManager connectPeripheral:sp.peripheral options:nil];
-            }
-        }
     }else{
         if(_isLogOn) NSLog(@"蓝牙状态异常:====[%ld]====",(long)_centralManager.state);
-        
-        //报告所有设备都已经断开连接
-        for (SimplePeripheral *SPeripheral in [_ConnectDevice_dict allValues]) {
-            [SPeripheral centralManager:central didDisconnectPeripheral:SPeripheral.peripheral error:nil];
-        }
     }
 }
 
 -(void)centralManager:(CBCentralManager *)central willRestoreState:(NSDictionary<NSString *,id> *)dict{
-    NSLog(@"central = %@",central);
-    NSLog(@"dict = %@",dict);
+//    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
+//
+//    恢复的外设对象
+//    SimplePeripheral *tmpPeripheral;
+//    for (CBPeripheral *cbP in peripherals) {
+//        tmpPeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
+//        [tmpPeripheral setPeripheral:cbP];
+//        [tmpPeripheral setIsLog:YES];
+//        [tmpPeripheral setIsAutoReconnect:YES];
+//        [tmpPeripheral setIsRestorePeripheral:YES];
+//        [_RestoreDevice_dict setValue:tmpPeripheral forKey:[cbP.identifier UUIDString]];
+//        [_ConnectDevice_dict setValue:tmpPeripheral forKey:[tmpPeripheral.peripheral.identifier UUIDString]];
+//        [_Device_dict setValue:tmpPeripheral forKey:[tmpPeripheral.peripheral.identifier UUIDString]];
+//    }
 }
 
 //启动搜索的结果回调
@@ -369,11 +389,10 @@
     if(simplePeripheral==nil){
         simplePeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
         [_Device_dict setValue:simplePeripheral forKey:[peripheral.identifier UUIDString]];
-        
     }
     
-    if(_isLogOn) NSLog(@"└┈搜索到设备:%@(上报应用层)",peripheral.name);
-    
+    if(_isLogOn) NSLog(@"└┈搜索到设备:%@(上报应用层),identifier = %@",peripheral.name,[peripheral.identifier UUIDString]);
+
     [simplePeripheral setPeripheral:peripheral];
     dispatch_async(dispatch_get_main_queue(), ^{
         
@@ -383,6 +402,7 @@
     });
 }
 
+//如果ios关闭蓝牙，不管有多少个外设已经连接，这个回调只走一次
 - (void) centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral
                   error:(NSError *)error{
     SimplePeripheral *simplePeripheral = [_Device_dict valueForKey:[peripheral.identifier UUIDString]];
@@ -405,6 +425,21 @@
     if (simplePeripheral) {
         [simplePeripheral centralManager:central didFailToConnectPeripheral:aPeripheral error:error];
     }
+}
+
+#pragma mark -
+#pragma mark 蓝牙连接状态的通知
+-(void)myPeripheralConnected:(NSNotification *)notification{
+    SimplePeripheral *simplePeripheral = [notification object];
+    [_ConnectDevice_dict setValue:simplePeripheral forKey:[simplePeripheral.peripheral.identifier UUIDString]];
+    if ( [_statusDelegate respondsToSelector:@selector(BLEManagerStatus:device:)] )
+        [_statusDelegate BLEManagerStatus:YES device:simplePeripheral];
+}
+-(void)myPeripheralDisconnected:(NSNotification*)notification{
+    SimplePeripheral *simplePeripheral = [notification object];
+    [_ConnectDevice_dict removeObjectForKey:[simplePeripheral.peripheral.identifier UUIDString]];
+    if ( [_statusDelegate respondsToSelector:@selector(BLEManagerStatus:device:)] )
+        [_statusDelegate BLEManagerStatus:NO device:simplePeripheral];
 }
 
 #pragma mark - 静态方法

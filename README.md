@@ -42,6 +42,8 @@ iphone demo：
 
 ```
 [[BLEManager getInstance] setIsLogOn:YES];//初始化顺便设置一下log是否显示在xcode里
+[[BLEManager getInstance] createCentralManagerWithOption:launchOptions];
+
 ```
 
 * **1. 执行搜索功能，上报外设对象给上层app**
@@ -52,9 +54,11 @@ iphone demo：
 [[BLEManager getInstance] stopScan];//搜索前先停止之前的搜索
 
 [[BLEManager getInstance] startScan:^(SimplePeripheral * _Nonnull peripheral) 
-{        
+{
+        
         //搜索到设备走这个block
-        } nameFilter:nil  timeout:10];
+        
+} nameFilter:nil  timeout:10];
 
 ```
 
@@ -62,11 +66,10 @@ iphone demo：
 * **2. 开始连接**
 
 ```
-    [[BLEManager getInstance] connectDevice:_selectedPeripheral callback:^(BOOL isPrepareToCommunicate) {
-        
-        NSLog(@"设备连接%@",isPrepareToCommunicate?@"成功":@"失败");
-        
-    }];
+    //设置delegate
+    [[BLEManager getInstance] setStatusDelegate:self];
+    //开始连接
+    [[BLEManager getInstance] connectDevice:_selectedPeripheral];
 
 ```
 
@@ -141,12 +144,28 @@ iphone demo：
 ```
 
 
+* **蓝牙发起连接后的结果回调**
+
+```
+#pragma mark 蓝牙连接状态的通知
+- (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral{
+    if (isConnected) {
+        NSLog(@"应用层得到设备连接成功的通知\n");
+        
+    }else{
+        NSLog(@"应用层得到设备连接失败的通知\n");
+    }
+}
+```
+
+
 * **其他**
 
   如果想实现直接连接某些特定设备，也可以直接调用下面的方法，它可以直接连接符合蓝牙名称的设备
   
 
-```[[BLEManager getInstance] scanAndConnected:@[@"Dual-SPP",@"iKG",@"K200"] callback:^(SimplePeripheral * _Nonnull peripheral, BOOL isPrepareToCommunicate) {    NSLog(@"%@",[peripheral getPeripheralName]);}];
+```
+[[BLEManager getInstance] scanAndConnected:@[@"Dual-SPP",@"iKG",@"K200"]];
 
 ```
   
@@ -165,10 +184,9 @@ iphone demo：
 * 听说BLE最多连接7个外设，我也没有办法测试
 * 如果需要模拟器版本和真机版本合并。请看framework工程中的CreateFrameWork.txt
 * 支持后台通讯，只要你的info.plist声明使用BLE后台模式
-* 读取广播数据啥的，RSS啥的，我都不用，目前为止没用过，要用自己实现在外设里面。
+* 读取广播数据啥的,我都不用，目前为止没用过，要用自己实现在外设里面。
 * 只支持中央模式，不支持ios模拟为外设的模式。
 * 此SDK不考虑多个指令并发的情况。比如我们的设备，每次都只响应一个指令，如果它还在工作中，你马上给它发下一个工作指令，它可能不会响应，除了一些取消操作指令，重置指令。所以假如你需要多个指令同时发送和接收数据，同一个notify特征应该会很难解析数据，而如果硬件支持使用不同的notify特征来接收数据的话，并且确实支持同时应答多个指令，SDK是支持同时发送接收多个指令的，互不影响。
 
-## 七. 更多使用方法见WiKi
 
 

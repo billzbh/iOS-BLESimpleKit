@@ -13,30 +13,28 @@
 
 @interface SimplePeripheral () <CBPeripheralDelegate>
 
-@property (copy, nonatomic)   BLEStatusBlock _Nullable    MyStatusBlock;
-@property (strong, nonatomic) CBCentralManager          *centralManager;
 @property (strong, nonatomic) NSDictionary              *serviceAndCharacteristicsDictionary;
-@property (strong, nonatomic) NSMutableDictionary       *Services;
-@property (strong, nonatomic) NSMutableDictionary       *Characteristics;
 @property (copy, nonatomic)   PacketVerifyEvaluator      packetVerifyEvaluator;
 @property (copy, nonatomic)   setupAfterConnected        AfterConnectedDoSomething;
-@property (strong,nonatomic)  DataDescription            *dataDescription;
+@property (copy, nonatomic)   readRSSIBlock              readRSSIcallback;
 @property (assign,nonatomic)  int                       MTU;
-@property (assign,nonatomic)  int                       CharacteristicsCount;
-@property (assign,nonatomic)  int                       ServicesCount;
 @property (assign,nonatomic)  CBCharacteristicWriteType ResponseType;
 @property (assign,nonatomic)  BOOL                      isLog;
-@property (assign,nonatomic)  BOOL                      isReadDescriptors;
-@property (assign,nonatomic)  BOOL                      isWorking;
 @property (strong,nonatomic)  NSData                    *AckData;
 @property (strong,nonatomic)  NSString                  *AckWriteCharacteristicUUIDString;
-@property (strong,nonatomic)  NSMutableDictionary       *continueNotifyUUIDStringAndBlockDict;
+@property (weak,nonatomic)    NSTimer *                 readRSSITimer;
 
 //都需要添加和删除元素
-@property (strong,nonatomic)  NSMutableDictionary       *DescriptionDict;
+@property (strong, nonatomic) CBCentralManager          *centralManager;
+@property (strong,nonatomic)  DataDescription            *dataDescription;
+@property (assign,nonatomic)  int                       CharacteristicsCount;
+@property (assign,nonatomic)  int                       ServicesCount;
 @property (strong,nonatomic)  NSMutableDictionary       *NotifyUUIDStringAndBlockDict;
 @property (strong,nonatomic)  NSMutableDictionary       *NotifyUUIDStringAndNSTimerDict;
 @property (strong,nonatomic)  NSMutableDictionary       *workingStatusDict;//每个特征通讯工作状态，主要记录订阅通知的工作状态
+@property (strong, nonatomic) NSMutableDictionary       *Services;
+@property (strong, nonatomic) NSMutableDictionary       *Characteristics;
+@property (strong,nonatomic)  NSMutableDictionary       *continueNotifyUUIDStringAndBlockDict;
 @end
 
 
@@ -51,13 +49,12 @@
     //初始化各个成员变量
     _centralManager = manager;
     _dataDescription = [[DataDescription alloc] init];
-    _isLog = NO;
-    _isReadDescriptors = NO;
-    _isAutoReconnect =NO;
+    _isLog = YES;
+    _isRestorePeripheral = NO;
+    _isAutoReconnect =YES;
     _MTU = -1;
     _CharacteristicsCount = 0;
     _ServicesCount = 0;
-    _isWorking = NO;
     _ResponseType = CBCharacteristicWriteWithoutResponse;
     _Characteristics = [[NSMutableDictionary alloc] init];
     _Services = [[NSMutableDictionary alloc] init];
@@ -65,7 +62,6 @@
     _NotifyUUIDStringAndBlockDict = [[NSMutableDictionary alloc] init];
     _NotifyUUIDStringAndNSTimerDict = [[NSMutableDictionary alloc] init];
     _workingStatusDict = [[NSMutableDictionary alloc] init];
-    _DescriptionDict = [[NSMutableDictionary alloc] init];
     return self;
 }
 
@@ -77,14 +73,12 @@
     _Characteristics= nil;
     _Services = nil;
     _peripheral = nil;
-    _MyStatusBlock = nil;
     _packetVerifyEvaluator = nil;
     _AfterConnectedDoSomething = nil;
     _AckWriteCharacteristicUUIDString = nil;
     _continueNotifyUUIDStringAndBlockDict = nil;
     _NotifyUUIDStringAndBlockDict = nil;
     _NotifyUUIDStringAndNSTimerDict = nil;
-    _DescriptionDict = nil;
     _workingStatusDict = nil;
 }
 
@@ -141,7 +135,6 @@
     [_dataDescription setPacketVerifyEvaluator:_packetVerifyEvaluator];
 }
 
-
 -(BOOL)isConnected{
     
     if (_peripheral) {
@@ -163,19 +156,7 @@
 
 #pragma mark  -  操作方法
 
--(void)connectDevice:(BLEStatusBlock)myStatusBlock{
-    _MyStatusBlock = myStatusBlock;
-
-    if ([self isConnected]) {
-        __weak typeof(self) weakself = self;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if(weakself.isLog) NSLog(@"设备已处于连接状态");
-            if(weakself.MyStatusBlock!=nil)
-                weakself.MyStatusBlock(YES);
-        });
-        return;
-    }
-    
+-(void)connectDevice{
     if(_serviceAndCharacteristicsDictionary!=nil){
         if([_serviceAndCharacteristicsDictionary count] <=0 ){
             if(_isLog) NSLog(@"请先设置服务UUIDs");
@@ -193,10 +174,17 @@
         return;
     }
     
-    if(_isLog) NSLog(@"开始连接设备...");
+    if ([self isConnected]) {
+        __weak typeof(self) weakself = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if(weakself.isLog) NSLog(@"设备已处于连接状态");
+            [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_CONNECTED object:weakself];
+        });
+        return;
+    }
     
-    if([_centralManager isScanning])
-        [_centralManager stopScan];
+    if(_isLog) NSLog(@"开始连接设备...");
+    [[BLEManager getInstance] stopScan];
     
     if (_peripheral==nil) {
         if(_isLog) NSLog(@"发生nil错误,可能外设SimplePeripheral并不是来自搜索得来的对象");
@@ -204,7 +192,7 @@
     }
     
     [self.centralManager connectPeripheral:_peripheral
-                                   options:nil];
+                                   options:@{CBConnectPeripheralOptionNotifyOnNotificationKey:@YES}];
     
 }
 
@@ -279,7 +267,7 @@
 
 
 //发送接收(同步),返回的字典包含"data"和"error"字段
--(NSDictionary *_Nullable)sendData:(NSData * _Nonnull)data
+-(NSDictionary *_Nonnull)sendData:(NSData * _Nonnull)data
                       withWC:(NSString* _Nonnull)writeUUIDString
                       withNC:(NSString* _Nonnull)notifyUUIDString
                      timeout:(double)timeInterval
@@ -380,26 +368,59 @@
 -(void)startListenWithNC:(NSString* _Nonnull)notifyUUIDString updateDataBlock:(updateDataBlock _Nullable)callback
 {
     CBCharacteristic* characteristic = [_Characteristics objectForKey:notifyUUIDString];
-    if (characteristic ==nil || !characteristic.isNotifying) {
-        if(_isLog) NSLog(@"%@ 找不到或者不具备通知属性",notifyUUIDString);
+    if (characteristic ==nil) {
+        if(_isLog) NSLog(@"%@ 找不到特征：",notifyUUIDString);
         return;
     }
+    if ((characteristic.properties & CBCharacteristicPropertyNotify) != CBCharacteristicPropertyNotify){
+        if(_isLog) NSLog(@"%@ 特征没有可订阅属性",notifyUUIDString);
+        return;
+    }
+    if (characteristic.isNotifying == NO){
+        [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
+    }
+    
     [_continueNotifyUUIDStringAndBlockDict setValue:callback forKey:notifyUUIDString];
     return;
 }
 
-//停止监听数据更新 (如果想用发送接收方法，刚好notify的UUID和这个一样，需要停止监听)
+//停止监听数据更新 (如果想用发送接收方法，刚好notify的UUID和这个一样，建议停止监听)
 -(void)stopListenwithNC:(NSString* _Nonnull)notifyUUIDString
 {
     [_continueNotifyUUIDStringAndBlockDict removeObjectForKey:notifyUUIDString];
-    return;
+    CBCharacteristic* characteristic = [_Characteristics objectForKey:notifyUUIDString];
+    if (characteristic !=nil && characteristic.isNotifying == YES) {
+        [self.peripheral setNotifyValue:NO forCharacteristic:characteristic];
+    }
 }
 
+#pragma mark 间隔时间内读取一次当前的RSSI值
 
-#pragma mark 读取特征的描述文字
+-(void)readRSSI:(double)timeInterval repeats:(BOOL)isRepeat callback:(readRSSIBlock _Nonnull)callback{
+    
+    _readRSSIcallback = callback;
+    if(timeInterval<=0){
+        [self.peripheral readRSSI];
+        return;
+    }else{
+        
+        [self.peripheral readRSSI];
+        __weak typeof(self) weakself = self;
+        self.readRSSITimer = [NSTimer scheduledTimerWithTimeInterval:timeInterval repeats:isRepeat block:^(NSTimer * _Nonnull selfTimer) {
+            if(weakself.isLog) NSLog(@"定时器触发");
+            [self.peripheral readRSSI];
+        }];
+        [[NSRunLoop currentRunLoop] addTimer:self.readRSSITimer forMode:NSDefaultRunLoopMode];
+    }
+}
 
--(NSString *)readCharacteristicsDescriptors:(NSString *)characteristicUUID{
-    return _DescriptionDict[characteristicUUID];
+//对应 readRSSI，如果启动间隔方式读取RSSI，不需要的时候取消定时器
+-(void)cancelReadRSSITimer{
+    if (self.readRSSITimer!=nil && [_readRSSITimer isValid]) {
+        [_readRSSITimer invalidate];
+        _readRSSITimer = nil;
+    }
+    _readRSSIcallback = nil;
 }
 
 #pragma mark  - BLEManager会调用此外设的method
@@ -433,8 +454,7 @@
     if(_isLog) NSLog(@"设备连接异常:\n %@",error);
     __weak typeof(self) weakself = self;
     dispatch_async(dispatch_get_main_queue(), ^{
-        if(weakself.MyStatusBlock!=nil)
-            weakself.MyStatusBlock(NO);
+        [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_DISCONNECTED object:weakself];
     });
     return;
 }
@@ -450,7 +470,9 @@
         // We're disconnected, so start scanning again
         if(_isAutoReconnect){
             if(_isLog) NSLog(@"准备自动重连");
-            [self.centralManager connectPeripheral:_peripheral options:nil];
+            [self.centralManager connectPeripheral:_peripheral options:@{CBConnectPeripheralOptionNotifyOnNotificationKey:@YES}];
+        }else{
+            _isAutoReconnect = YES;
         }
     }
     
@@ -467,14 +489,12 @@
     [_Services removeAllObjects];
     [_Characteristics removeAllObjects];
     [_workingStatusDict removeAllObjects];
-    [_DescriptionDict removeAllObjects];
     [_NotifyUUIDStringAndBlockDict removeAllObjects];
     [_NotifyUUIDStringAndNSTimerDict removeAllObjects];
     
     __weak typeof(self) weakself = self;
     dispatch_async(dispatch_get_main_queue(), ^{
-        if(weakself.MyStatusBlock!=nil)
-            weakself.MyStatusBlock(NO);
+        [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_DISCONNECTED object:weakself];
     });
 }
 
@@ -495,7 +515,7 @@
         for (CBService *service in peripheral.services) {
             NSString *UUIDString = [service.UUID UUIDString];
             [_Services setValue:service forKey:UUIDString];
-            [peripheral discoverCharacteristics:nil forService:service];
+            [peripheral discoverCharacteristics:nil forService:service];//程序在后台唤醒时，如果蓝牙已经断开，执行到这里会停住，直到app在前台才会继续执行这个程序。
         }
     }else{
         
@@ -519,8 +539,6 @@
             _CharacteristicsCount += [characteristicCBUUIDArray count];
         }
     }
-    
-    
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didDiscoverCharacteristicsForService:(CBService *)service
@@ -543,26 +561,39 @@
         for (CBCharacteristic *characteristic in service.characteristics){
             
             if(_isLog) NSLog(@"   └┈┈特征UUID: %@",[characteristic.UUID UUIDString]);
-//            if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
-//                [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
-//            }
-            [_Characteristics setValue:characteristic forKey:[characteristic.UUID UUIDString]];
             
-            if(_isReadDescriptors){
-                [self.peripheral discoverDescriptorsForCharacteristic:characteristic];
+            //提前订阅通知
+            if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
+                [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
             }
+
+            
+            [_Characteristics setValue:characteristic forKey:[characteristic.UUID UUIDString]];
         }
         
         if (_ServicesCount == [_Services count]) {
-            //通知成功前，提前做一些事情
-            if(_AfterConnectedDoSomething)
-                _AfterConnectedDoSomething();
             
-            if(_isLog) NSLog(@"连接成功！！！当前连接设备为:%@",_peripheral.name);
             __weak typeof(self) weakself = self;
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if(weakself.MyStatusBlock!=nil)
-                    weakself.MyStatusBlock(YES);
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                //通知成功前，提前做一些事情
+                if(weakself.AfterConnectedDoSomething)
+                    weakself.AfterConnectedDoSomething();
+                
+                //TODO
+                //后台恢复对象后做测试
+                //            if(_isRestore && [[characteristic.UUID UUIDString] isEqualToString:@"2AF1"]){
+                //                _isRestore = NO;
+                //                NSData *data=[BLEManager hexString2NSData:@"0200ff0200036304140370"];
+                //                [self.peripheral writeValue:data
+                //                          forCharacteristic:characteristic
+                //                                       type:CBCharacteristicWriteWithoutResponse];
+                //            }
+                
+                
+                if(weakself.isLog) NSLog(@"连接成功！！！当前连接设备为:%@",weakself.peripheral.name);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_CONNECTED object:weakself];
+                });
             });
         }
         
@@ -578,42 +609,28 @@
         for (CBCharacteristic *characteristic in service.characteristics){
             
             if(_isLog) NSLog(@"   └┈┈特征UUID: %@",[characteristic.UUID UUIDString]);
-            
-//            if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
-//                [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
-//            }
-            [_Characteristics setValue:characteristic forKey:[characteristic.UUID UUIDString]];
-            
-            if(_isReadDescriptors){
-                [self.peripheral discoverDescriptorsForCharacteristic:characteristic];
+            if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
+                [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
             }
+            [_Characteristics setValue:characteristic forKey:[characteristic.UUID UUIDString]];
         }
         
         if ([_Characteristics count] == _CharacteristicsCount) {//结束搜索特征
-            //通知成功前，提前做一些事情
-            if(_AfterConnectedDoSomething)
-                _AfterConnectedDoSomething();
             
-            if(_isLog) NSLog(@"连接成功！！！当前连接设备为:%@",_peripheral.name);
             __weak typeof(self) weakself = self;
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if(weakself.MyStatusBlock!=nil)
-                    weakself.MyStatusBlock(YES);
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                //通知成功前，提前做一些事情
+                if(weakself.AfterConnectedDoSomething)
+                    weakself.AfterConnectedDoSomething();
+                if(weakself.isLog) NSLog(@"连接成功！！！当前连接设备为:%@",weakself.peripheral.name);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_CONNECTED object:weakself];
+                });
             });
         }
     }
 }
 
-
--(void)peripheral:(CBPeripheral *)peripheral didDiscoverDescriptorsForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error{
-    if (error) {
-        if(_isLog) NSLog(@"读特征的描述文字时发生错误:\n %@",error);
-        return;
-    }
-    
-    //把描述文字添加到字典
-    [_DescriptionDict setValue:[[NSString alloc] initWithData:characteristic.value encoding:NSUTF8StringEncoding] forKey:[characteristic.UUID UUIDString]];
-}
 
 - (void)peripheral:(CBPeripheral *)peripheral didUpdateValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error
 {
@@ -631,7 +648,7 @@
     receiveDataBlock receiveCallback = [_NotifyUUIDStringAndBlockDict objectForKey:uuidString];
     if (updateCallback !=nil && [_workingStatusDict[uuidString] boolValue]==NO) {
         updateCallback(characteristic.value);
-    }else{
+    }else if(receiveCallback!=nil){
         [_dataDescription appendData:characteristic.value uuid:uuidString];//这里不断收集数据。发送接收用
         if(_isLog) {
             NSLog(@"数据长度总长:%ld",(unsigned long)[[_dataDescription getPacketData:uuidString] length]);
@@ -671,6 +688,21 @@
             if(weakself.isLog) NSLog(@"宝宝赶紧回了一个应答:%@",weakself.AckData);
         });
     };
+}
+
+-(void)peripheral:(CBPeripheral *)peripheral didReadRSSI:(NSNumber *)RSSI error:(NSError *)error{
+    
+    if (error) {
+        if(_isLog) NSLog(@"读RSSI时发生错误:\n %@",error);
+        return;
+    }
+    
+    if(_isLog) {
+        NSLog(@"RSSI:%lf",[RSSI floatValue]);
+    }
+    if (_readRSSIcallback!=nil) {
+        _readRSSIcallback(RSSI);
+    }
 }
 
 

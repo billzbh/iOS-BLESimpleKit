@@ -25,7 +25,8 @@
     navigationController.topViewController.navigationItem.leftBarButtonItem = splitViewController.displayModeButtonItem;
     splitViewController.delegate = self;
     
-    [[BLEManager getInstance] setIsLogOn:YES];//初始化并设置打印log信息到xcode
+    [[BLEManager getInstance] createCentralManagerWithOption:launchOptions];
+    [[BLEManager getInstance] setIsLogOn:YES];
     return YES;
 }
 
@@ -54,6 +55,8 @@
 
 - (void)applicationWillTerminate:(UIApplication *)application {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+    NSLog(@"applicationWillTerminate == exit exit");
+    
 }
 
 
