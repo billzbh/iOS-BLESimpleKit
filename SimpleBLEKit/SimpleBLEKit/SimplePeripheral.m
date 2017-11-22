@@ -24,6 +24,7 @@
 @property (strong,nonatomic)  NSString                  *AckWriteCharacteristicUUIDString;
 @property (weak,nonatomic)    NSTimer *                 readRSSITimer;
 
+
 //都需要添加和删除元素
 @property (strong, nonatomic) CBCentralManager          *centralManager;
 @property (strong,nonatomic)  DataDescription            *dataDescription;
@@ -80,6 +81,7 @@
     _NotifyUUIDStringAndBlockDict = nil;
     _NotifyUUIDStringAndNSTimerDict = nil;
     _workingStatusDict = nil;
+    _LocalName = nil;
 }
 
 -(void)setAckData:(NSData* _Nullable)data withWC:(NSString * _Nullable)writeUUIDString
@@ -151,7 +153,7 @@
 }
 
 -(NSString*)getPeripheralName{
-    return _peripheral.name;
+    return _LocalName;
 }
 
 #pragma mark  -  操作方法
@@ -590,7 +592,7 @@
                 //            }
                 
                 
-                if(weakself.isLog) NSLog(@"连接成功！！！当前连接设备为:%@",weakself.peripheral.name);
+                if(weakself.isLog) NSLog(@"连接成功！！！当前连接设备为:%@",weakself.LocalName);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_CONNECTED object:weakself];
                 });
@@ -622,7 +624,7 @@
                 //通知成功前，提前做一些事情
                 if(weakself.AfterConnectedDoSomething)
                     weakself.AfterConnectedDoSomething();
-                if(weakself.isLog) NSLog(@"连接成功！！！当前连接设备为:%@",weakself.peripheral.name);
+                if(weakself.isLog) NSLog(@"连接成功！！！当前连接设备为:%@",weakself.LocalName);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [[NSNotificationCenter defaultCenter] postNotificationName:BLESTATUS_CONNECTED object:weakself];
                 });

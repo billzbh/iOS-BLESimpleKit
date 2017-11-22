@@ -10,7 +10,7 @@
 #import "SimplePeripheralPrivate.h"
 #import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20171120_LAST_COMMIT=a4850e4"
+#define BLE_SDK_VERSION @"20171122_LAST_COMMIT=c35a3bd"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -441,9 +441,10 @@
       advertisementData:(NSDictionary *)advertisementData
                    RSSI:(NSNumber *)RSSI
 {
-    if (peripheral==nil || peripheral.name==nil || [[peripheral.name stringByReplacingOccurrencesOfString:@" " withString:@""] isEqualToString:@""]) {
+    NSString *btLocalName = advertisementData[CBAdvertisementDataLocalNameKey];
+    if (peripheral==nil || btLocalName==nil || [[btLocalName stringByReplacingOccurrencesOfString:@" " withString:@""] isEqualToString:@""]) {
 #ifdef DEBUG
-        if(_isLogOn) NSLog(@"└┈搜索到设备:%@(名称为空)",peripheral.name);
+        if(_isLogOn) NSLog(@"└┈搜索到设备:%@(名称为空)",btLocalName);
 #endif
         return;
     }
@@ -451,17 +452,17 @@
     NSString *name = [_searchedDeviceUUIDArray valueForKey:[peripheral.identifier UUIDString]];
     if (name!=nil) {
 #ifdef DEBUG
-        if(_isLogOn) NSLog(@"└┈搜索到设备:%@(重复)",peripheral.name);
+        if(_isLogOn) NSLog(@"└┈搜索到设备:%@(重复)",name);
 #endif
         return;
     }else{
-        [_searchedDeviceUUIDArray setValue:peripheral.name forKey:[peripheral.identifier UUIDString]];
+        [_searchedDeviceUUIDArray setValue:btLocalName forKey:[peripheral.identifier UUIDString]];
     }
 
     if(_FilterBleNameArray!=nil){
         int i = 0;
         for (NSString* name in _FilterBleNameArray) {
-            if([peripheral.name containsString:name])
+            if([btLocalName containsString:name])
                 break;
             i++;
         }
@@ -479,9 +480,10 @@
         [_Device_dict setValue:simplePeripheral forKey:[peripheral.identifier UUIDString]];
     }
     
-    if(_isLogOn) NSLog(@"└┈搜索到设备:%@(上报应用层),identifier = %@",peripheral.name,[peripheral.identifier UUIDString]);
+    if(_isLogOn) NSLog(@"└┈搜索到设备:%@(上报应用层),identifier = %@",btLocalName,[peripheral.identifier UUIDString]);
 
     [simplePeripheral setPeripheral:peripheral];
+    simplePeripheral.LocalName = btLocalName;
     dispatch_async(dispatch_get_main_queue(), ^{
         
         __strong typeof(self) strongself = weakself;

@@ -10,6 +10,7 @@
 
 @interface SimplePeripheral ()
 
+@property (strong,nonatomic)  NSString                  *LocalName;
 @property (strong, nonatomic) CBPeripheral   *__nullable peripheral;
 @property (assign,nonatomic)  BOOL                      isAutoReconnect;
 @property (assign,nonatomic)  BOOL                      isRestorePeripheral;

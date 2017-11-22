@@ -65,6 +65,8 @@
         return NO;
     }];
     //加快搜索服务和特征速度，间接加快连接速度.
+    //格式: @{service1:@[characterist1,characterist2],service2:@[characterist3,characterist4]}
+//    [_selectedPeripheral setServiceAndCharacteristicsDictionary:@{serviceuuid:@[writeuuid,notifyuuid]}];
     [_selectedPeripheral setServiceAndCharacteristicsDictionary:nil];
 
     //发起连接前，对外设做各项设置(可选) === end ===
