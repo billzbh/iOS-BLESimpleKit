@@ -10,8 +10,12 @@
 #define Typedef_h_SimpleBLEKit
 
 @class SimplePeripheral;
+
+//蓝牙连接状态的通知Key
 #define BLESTATUS_CONNECTED    @"com.SimpleBLEKit.Connected"
 #define BLESTATUS_DISCONNECTED @"com.zbh.Disconnected"
+//搜索蓝牙的结果通知Key
+#define BLE_DEVICE_FOUND       @"com.SimpleBLEKit.FoundSmartBLE"
 
 typedef void (^SearchBlock)(SimplePeripheral* _Nonnull peripheral);
 

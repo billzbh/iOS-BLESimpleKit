@@ -76,14 +76,12 @@
         [self.objects removeAllObjects];
         [self.tableView reloadData];
     }
-    
-    [[BLEManager getInstance] setStatusDelegate:self];
     [[BLEManager getInstance] stopScan];
     
     //参数是设备内的serviceuuid其中一个，不是CBPeripheral的identifier
-//    [[BLEManager getInstance] setScanServiceUUIDs:@[@"FFF0",@"18F0",@"180A"]];
+    [[BLEManager getInstance] setScanServiceUUIDs:@[@"49535343-FE7D-4AE5-8FA9-9FAFD205E455"]];
     
-    [[BLEManager getInstance] startScanByNameFilter:nil/*@[@"iMate",@"K203",@"HxBluetooth",@"JXNX"]*/ timeout:4];
+    [[BLEManager getInstance] startScanByNameFilter:nil/*@[@"iMate",@"K203",@"HxBluetooth",@"JXNX"]*/ timeout:6];
 }
 
 
@@ -140,11 +138,11 @@
 
     if (isConnected) {
         NSLog(@"应用层得到设备连接成功的通知\n");
-        [detailViewController.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
+        [detailViewController.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
         detailViewController.connectOrDisconnect.tag = 1;
     }else{
         NSLog(@"应用层得到设备连接失败的通知\n");
-        [detailViewController.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
+        [detailViewController.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
         detailViewController.connectOrDisconnect.tag = 0;
     }
 }

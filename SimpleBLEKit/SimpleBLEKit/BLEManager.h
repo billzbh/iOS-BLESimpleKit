@@ -11,24 +11,11 @@
 #import <CoreBluetooth/CoreBluetooth.h>
 #import "SimpleBLEKitTypeDef.h"
 
-@protocol BLEManagerStatusDelegate <NSObject>
-@optional
-// 当外设蓝牙和ios连接成功或者中断时，该方法被调用，通知目前的蓝牙连接状态
-- (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral;
-
-- (void)searchBLEPeripheral:(SimplePeripheral * _Nonnull)peripheral;
-@end
-
 @interface BLEManager : NSObject
 
 //单例对象,必须在appdelegate中调用一次，并且设置初始化中央对象
 + (BLEManager * _Nonnull)getInstance;
-
-
 -(void)createCentralManagerWithOption:(NSDictionary *_Nullable)launchOptions;
-
-//设置外设蓝牙连接状态delegate
--(void)setStatusDelegate:(id _Nullable)delegate;
 
 //获取SDK版本
 -(NSString * _Nonnull)getSDKVersion;
@@ -36,12 +23,15 @@
 //是否在xcode中打印中央对象的log
 -(void)setIsLogOn:(BOOL)isLogOn;
 
-//设置要搜索的设备的service UUID，搜索时会把系统中其他app已经连接的设备，并且符合此uuids的设备也上报，此接口同样接受nameFilters的过滤。
+//设置要搜索的设备的service UUID，搜索时会把系统中其他app已经连接的设备，并且符合此uuids的设备也上报，nameFilters的优先级更高。
 //如果已经设置过后想变为全部搜索，再次调用设置为nil
 -(void)setScanServiceUUIDs:(NSArray<NSString *>* _Nullable)services;
 
-//只搜索符合名称过滤规则的蓝牙设备
+//搜索符合名称过滤规则的蓝牙设备,通知方式
 -(void)startScanByNameFilter:(NSArray<NSString *>*_Nullable)nameFilters
+         timeout:(NSTimeInterval)interval;
+//搜索符合过滤名称的设备 block方式
+-(void)startScan:(SearchBlock _Nonnull)searchBLEBlock nameFilter:(NSArray<NSString *>*)nameFilters
          timeout:(NSTimeInterval)interval;
 
 //停止搜索
@@ -49,9 +39,6 @@
 
 //连接设备
 -(void)connectDevice:(SimplePeripheral * _Nonnull)simplePeripheral;
-
-//合并 startSearch 和 connectDevice 方法。直接连接符合蓝牙名称的设备
--(void)scanAndConnected:(NSArray<NSString *>* _Nonnull)btNameArray;
 
 
 //返回此BLEManager对象管理的所有已连接外设

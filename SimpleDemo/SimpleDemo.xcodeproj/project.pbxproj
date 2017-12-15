@@ -356,7 +356,7 @@
 					"$(PROJECT_DIR)/SimpleDemo",
 				);
 				INFOPLIST_FILE = SimpleDemo/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.hxsmart.SimpleDemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -374,7 +374,7 @@
 					"$(PROJECT_DIR)/SimpleDemo",
 				);
 				INFOPLIST_FILE = SimpleDemo/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.hxsmart.SimpleDemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";

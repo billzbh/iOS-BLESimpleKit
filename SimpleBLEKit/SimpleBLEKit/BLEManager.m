@@ -10,7 +10,7 @@
 #import "SimplePeripheralPrivate.h"
 #import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20171122_LAST_COMMIT=c35a3bd"
+#define BLE_SDK_VERSION @"20171215_LAST_COMMIT=06c8c4e"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -23,7 +23,6 @@
 @property (strong,nonatomic) NSMutableDictionary *ConnectDevice_dict;//已连接的对象
 @property (strong, nonatomic) NSMutableDictionary  *searchedDeviceUUIDArray;
 @property (assign,nonatomic) BOOL isLogOn;
-@property (weak,nonatomic) id statusDelegate;
 @property (weak,nonatomic) NSTimer * scanTimer;
 @end
 
@@ -84,7 +83,9 @@
         NSArray *pathArray = [manager subpathsAtPath:bunPath];//app目录下的所有子文件路径
         for (NSString *path in pathArray) {
             if ([path hasSuffix:@".plist"]) {
-                NSString * content = [NSString stringWithContentsOfFile:path encoding:NSASCIIStringEncoding error:nil];
+                NSError *error;
+                NSString *pathfile=[bunPath stringByAppendingPathComponent:path];
+                NSString * content = [NSString stringWithContentsOfFile:pathfile encoding:NSASCIIStringEncoding error:&error];
                 if ([content containsString:@"bluetooth-central"]) {
                     
                     HasBackgroundForBt=YES;
@@ -118,11 +119,6 @@
         //在蓝牙关闭时，是否提示蓝牙需要打开
         _centralManager = [[CBCentralManager alloc] initWithDelegate:self queue:_centralManagerQueue options:@{CBCentralManagerOptionShowPowerAlertKey:@YES}];
     }
-}
-
-//设置外设蓝牙连接状态delegate
--(void)setStatusDelegate:(id _Nullable)delegate{
-    _statusDelegate = delegate;
 }
 
 
@@ -224,8 +220,7 @@
             SimplePeripheral *peripheral = strongself.Device_dict[key];
             if ([peripheral isConnected]) {
                 if(strongself.isLogOn) NSLog(@"└┈上报%@",[peripheral getPeripheralName]);
-                if ( [strongself.statusDelegate respondsToSelector:@selector(searchBLEPeripheral:)] )
-                    [strongself.statusDelegate searchBLEPeripheral:peripheral];
+                [[NSNotificationCenter defaultCenter] postNotificationName:BLE_DEVICE_FOUND object:peripheral];
             }
         }
     });
@@ -258,10 +253,7 @@
                 [_Device_dict setValue:tmpPeripheral forKey:[cbP.identifier UUIDString]];
                 
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    __strong typeof(self) strongself = weakself;
-                    if ( [strongself.statusDelegate respondsToSelector:@selector(searchBLEPeripheral:)] ){
-                        [strongself.statusDelegate searchBLEPeripheral:tmpPeripheral];
-                    }
+                    [[NSNotificationCenter defaultCenter] postNotificationName:BLE_DEVICE_FOUND object:tmpPeripheral];
                 });
             }
         }
@@ -279,11 +271,8 @@
         NSLog(@"开始搜索%@",interval>0?str:@"");
     }
     
-    if([_services count]>0){
-        [self.centralManager scanForPeripheralsWithServices:_services options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@NO}];
-    }else{
-        [self.centralManager scanForPeripheralsWithServices:nil options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@NO}];
-    }
+    //此接口建议将第一个参数设置为nil。 因为有些蓝牙模块广播的时候没有声明自己的service，会导致搜索不到它。
+    [self.centralManager scanForPeripheralsWithServices:nil options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@NO}];
 }
 
 //搜索符合过滤名称的设备 block方式
@@ -388,15 +377,6 @@
 }
 
 
-//合并 startSearch 和 connectDevice 方法。直接连接符合蓝牙名称的多个设备
--(void)scanAndConnected:(NSArray<NSString *>*)btNameArray
-{
-    [self startScan:^(SimplePeripheral * _Nonnull peripheral) {
-        [peripheral connectDevice];
-    } nameFilter:btNameArray timeout:2*btNameArray.count+2];
-}
-
-
 -(void)stopScan{
     [self.centralManager stopScan];
     if (_scanTimer!=nil && [_scanTimer isValid]) {
@@ -419,8 +399,9 @@
 }
 
 -(void)centralManager:(CBCentralManager *)central willRestoreState:(NSDictionary<NSString *,id> *)dict{
-//    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
-//
+    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
+    
+    
 //    恢复的外设对象
 //    SimplePeripheral *tmpPeripheral;
 //    for (CBPeripheral *cbP in peripherals) {
@@ -429,9 +410,8 @@
 //        [tmpPeripheral setIsLog:YES];
 //        [tmpPeripheral setIsAutoReconnect:YES];
 //        [tmpPeripheral setIsRestorePeripheral:YES];
-//        [_RestoreDevice_dict setValue:tmpPeripheral forKey:[cbP.identifier UUIDString]];
-//        [_ConnectDevice_dict setValue:tmpPeripheral forKey:[tmpPeripheral.peripheral.identifier UUIDString]];
-//        [_Device_dict setValue:tmpPeripheral forKey:[tmpPeripheral.peripheral.identifier UUIDString]];
+//
+//        [self connectDevice:tmpPeripheral];
 //    }
 }
 
@@ -487,11 +467,10 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         
         __strong typeof(self) strongself = weakself;
-        if ( [strongself.statusDelegate respondsToSelector:@selector(searchBLEPeripheral:)] ){
-            [strongself.statusDelegate searchBLEPeripheral:simplePeripheral];
-        }
         if (strongself.MysearchBLEBlock) {
             strongself.MysearchBLEBlock(simplePeripheral);
+        }else{
+            [[NSNotificationCenter defaultCenter] postNotificationName:BLE_DEVICE_FOUND object:peripheral];
         }
     });
 }
@@ -526,14 +505,10 @@
 -(void)myPeripheralConnected:(NSNotification *)notification{
     SimplePeripheral *simplePeripheral = [notification object];
     [_ConnectDevice_dict setValue:simplePeripheral forKey:[simplePeripheral.peripheral.identifier UUIDString]];
-    if ( [_statusDelegate respondsToSelector:@selector(BLEManagerStatus:device:)] )
-        [_statusDelegate BLEManagerStatus:YES device:simplePeripheral];
 }
 -(void)myPeripheralDisconnected:(NSNotification*)notification{
     SimplePeripheral *simplePeripheral = [notification object];
     [_ConnectDevice_dict removeObjectForKey:[simplePeripheral.peripheral.identifier UUIDString]];
-    if ( [_statusDelegate respondsToSelector:@selector(BLEManagerStatus:device:)] )
-        [_statusDelegate BLEManagerStatus:NO device:simplePeripheral];
 }
 
 #pragma mark - 静态方法

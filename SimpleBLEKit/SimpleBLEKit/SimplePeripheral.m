@@ -11,7 +11,10 @@
 #import "DataDescription.h"
 #import "BLEManager.h"
 
-@interface SimplePeripheral () <CBPeripheralDelegate>
+@interface SimplePeripheral () <CBPeripheralDelegate>{
+    dispatch_queue_t myQueue;
+    dispatch_semaphore_t sem;
+}
 
 @property (strong, nonatomic) NSDictionary              *serviceAndCharacteristicsDictionary;
 @property (copy, nonatomic)   PacketVerifyEvaluator      packetVerifyEvaluator;
@@ -63,6 +66,8 @@
     _NotifyUUIDStringAndBlockDict = [[NSMutableDictionary alloc] init];
     _NotifyUUIDStringAndNSTimerDict = [[NSMutableDictionary alloc] init];
     _workingStatusDict = [[NSMutableDictionary alloc] init];
+    
+    myQueue = dispatch_queue_create("com.my.queue.zbh", DISPATCH_QUEUE_SERIAL);
     return self;
 }
 
@@ -82,6 +87,7 @@
     _NotifyUUIDStringAndNSTimerDict = nil;
     _workingStatusDict = nil;
     _LocalName = nil;
+    myQueue = nil;
 }
 
 -(void)setAckData:(NSData* _Nullable)data withWC:(NSString * _Nullable)writeUUIDString
@@ -153,7 +159,7 @@
 }
 
 -(NSString*)getPeripheralName{
-    return _LocalName;
+    return _LocalName==nil?_peripheral.name:_LocalName;
 }
 
 #pragma mark  -  操作方法
@@ -173,7 +179,6 @@
     
     if(_packetVerifyEvaluator==nil){
         NSLog(@"PacketVerifyEvaluator未设置\n-----默认规则是收到数据包size大于0就认为收包完整\n自定义收包完整的规则,调用(二选一):\n-(void)setPacketVerifyEvaluator:(PacketVerifyEvaluator)packetEvaluator\n-(void)setResponseMatch:(NSString*)prefixString sufferString:(NSString*)sufferString NSDataExpectLength:(int)expectLen\n");
-        return;
     }
     
     if ([self isConnected]) {
@@ -230,37 +235,45 @@
     }
     
     __weak typeof(self) weakself = self;
-    dispatch_async(dispatch_get_main_queue(), ^{ //解决多线程写数据冲突的问题，使用main_queue进行排队
+    dispatch_async(myQueue, ^{ //解决多线程写数据冲突的问题，使用main_queue进行排队
         
-        if (_MTU <= 0 ) {//直接发送
-            
-            [weakself.peripheral writeValue:data
-                      forCharacteristic:characteristic
-                                   type:weakself.ResponseType];
-            
-        }else{//分包发送
-            
-            int newMTU = (int)[self.peripheral maximumWriteValueLengthForType:_ResponseType];
-            if(_isLog)
-                NSLog(@"设置的MTU实验值=%d 系统和外设协商的MTU=%d",_MTU,newMTU);
+        int newMTU = (int)[self.peripheral maximumWriteValueLengthForType:_ResponseType];
+        int AutoSendLength = 0;
+        if(_isLog)
+            NSLog(@"设置的MTU实验值=%d 系统和外设协商的MTU=%d",_MTU,newMTU);
+        
+        if (_MTU <= 0 ) {//没有指定MTU,使用协商的MTU
+            AutoSendLength = newMTU;
+        }else{//自定义MTU
             if (_MTU > newMTU) {//设置的MTU实验值不能大于系统协商的MTU值
-                _MTU = newMTU;
+                AutoSendLength = newMTU;
+            }else{
+                AutoSendLength = _MTU;
             }
+        }
         
-            int length = (int)data.length;
-            int offset = 0;
-            int sendLength = 0;
-            while (length) {
-                sendLength = length;
-                if (length > _MTU)
-                    sendLength = _MTU;
-                
-                NSData *tmpData = [data subdataWithRange:NSMakeRange(offset, sendLength)];
-                [weakself.peripheral writeValue:tmpData
+        int length = (int)data.length;
+        int offset = 0;
+        int sendLength = 0;
+        while (length) {
+            
+            if(_ResponseType==CBCharacteristicWriteWithResponse){
+                sem = dispatch_semaphore_create(0);
+            }
+            
+            sendLength = length;
+            if (length > AutoSendLength)
+                sendLength = AutoSendLength;
+            
+            NSData *tmpData = [data subdataWithRange:NSMakeRange(offset, sendLength)];
+            [weakself.peripheral writeValue:tmpData
                           forCharacteristic:characteristic
                                        type:weakself.ResponseType];
-                offset += sendLength;
-                length -= sendLength;
+            offset += sendLength;
+            length -= sendLength;
+            
+            if(_ResponseType==CBCharacteristicWriteWithResponse){
+                dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
             }
         }
     });
@@ -321,19 +334,20 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 callback(nil,[NSError errorWithDomain:@"com.zhangbh.SimpleBLEKit" code:2 userInfo:@{@"info":@"订阅特征找不到"}]);
             });
-            _workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
+            weakself.workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
             return;
-        }else if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
+        }else if (((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify || (characteristic.properties & CBCharacteristicPropertyIndicate) == CBCharacteristicPropertyIndicate) && characteristic.isNotifying == NO) {
             [weakself.peripheral setNotifyValue:YES forCharacteristic:characteristic];
             usleep(100000);
         }
-        [_NotifyUUIDStringAndBlockDict setValue:callback forKey:notifyUUIDString];
+        
+        [weakself.NotifyUUIDStringAndBlockDict setValue:callback forKey:notifyUUIDString];
         
         if([weakself sendData:data withWC:writeUUIDString]==NO){
             dispatch_async(dispatch_get_main_queue(), ^{
                 callback(nil,[NSError errorWithDomain:@"com.zhangbh.SimpleBLEKit" code:3 userInfo:@{@"info":@"写入特征找不到"}]);
             });
-            _workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
+            weakself.workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
             return;
         }
         
@@ -342,7 +356,7 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 callback(nil,[NSError errorWithDomain:@"com.zhangbh.SimpleBLEKit" code:4 userInfo:@{@"info":@"超时时间必须大于0"}]);
             });
-            _workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
+            weakself.workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
             return;
         }
         
@@ -352,15 +366,15 @@
             NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:timeInterval repeats:NO block:^(NSTimer * _Nonnull selfTimer) {
                 if(weakself.isLog) NSLog(@"定时器触发");
                 callback(nil,[NSError errorWithDomain:@"com.zhangbh.SimpleBLEKit" code:5 userInfo:@{@"info":@"通讯超时，设备没有响应"}]);
-                _workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
+                weakself.workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:NO];
                 
                 NSTimer *timer = [_NotifyUUIDStringAndNSTimerDict objectForKey:notifyUUIDString];
                 if ([timer isValid]) {
                     [timer invalidate];//关闭定时器
-                    [_NotifyUUIDStringAndNSTimerDict removeObjectForKey:notifyUUIDString];
+                    [weakself.NotifyUUIDStringAndNSTimerDict removeObjectForKey:notifyUUIDString];
                 }
             }];
-            [_NotifyUUIDStringAndNSTimerDict setValue:timer forKey:notifyUUIDString];
+            [weakself.NotifyUUIDStringAndNSTimerDict setValue:timer forKey:notifyUUIDString];
         });
     });
 }
@@ -565,7 +579,7 @@
             if(_isLog) NSLog(@"   └┈┈特征UUID: %@",[characteristic.UUID UUIDString]);
             
             //提前订阅通知
-            if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
+            if (((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify || (characteristic.properties & CBCharacteristicPropertyIndicate) == CBCharacteristicPropertyIndicate) && characteristic.isNotifying == NO) {
                 [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
             }
 
@@ -611,7 +625,7 @@
         for (CBCharacteristic *characteristic in service.characteristics){
             
             if(_isLog) NSLog(@"   └┈┈特征UUID: %@",[characteristic.UUID UUIDString]);
-            if ((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify && characteristic.isNotifying == NO) {
+            if (((characteristic.properties & CBCharacteristicPropertyNotify) == CBCharacteristicPropertyNotify || (characteristic.properties & CBCharacteristicPropertyIndicate) == CBCharacteristicPropertyIndicate) && characteristic.isNotifying == NO) {
                 [self.peripheral setNotifyValue:YES forCharacteristic:characteristic];
             }
             [_Characteristics setValue:characteristic forKey:[characteristic.UUID UUIDString]];
@@ -717,6 +731,10 @@
         return;
     }
     if(_isLog) NSLog(@"特征%@成功发送:%@",[characteristic.UUID UUIDString],characteristic.value);
+    
+    if(_ResponseType==CBCharacteristicWriteWithResponse && sem!=NULL){
+        dispatch_semaphore_signal(sem);
+    }
 }
 
 
