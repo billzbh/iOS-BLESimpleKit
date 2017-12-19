@@ -288,7 +288,7 @@
                      timeout:(double)timeInterval
 {
     //创建信号量
-    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    dispatch_semaphore_t semTmp = dispatch_semaphore_create(0);
     __block NSMutableDictionary * result = [[NSMutableDictionary alloc] init];
     //初始化一个错误值
     result[@"error"] = [NSError errorWithDomain:@"com.zhangbh.SimpleBLEKit" code:5 userInfo:@{@"info":@"通讯超时，设备没有响应"}];
@@ -296,11 +296,11 @@
         
         result[@"data"] = outData;
         result[@"error"] = error;
-        dispatch_semaphore_signal(sem);//释放信号量
+        dispatch_semaphore_signal(semTmp);//释放信号量
     }];
     //这里一直等待，直到超时
     dispatch_time_t waitTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)((timeInterval+0.5) * NSEC_PER_SEC));
-    dispatch_semaphore_wait(sem, waitTime);
+    dispatch_semaphore_wait(semTmp, waitTime);
     return result;
 }
 
