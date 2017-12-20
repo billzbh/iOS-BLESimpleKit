@@ -20,7 +20,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
-
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(myPeripheralFound:) name:BLE_DEVICE_FOUND object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(myPeripheralConnected:) name:BLESTATUS_CONNECTED object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(myPeripheralDisconnected:) name:BLESTATUS_DISCONNECTED object:nil];
+    
     UIBarButtonItem *disconnectAllButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemStop target:self action:@selector(disconnectAll:)];
     self.navigationItem.leftBarButtonItem = disconnectAllButton;
     
@@ -79,9 +82,9 @@
     [[BLEManager getInstance] stopScan];
     
     //参数是设备内的serviceuuid其中一个，不是CBPeripheral的identifier
-    [[BLEManager getInstance] setScanServiceUUIDs:@[@"49535343-FE7D-4AE5-8FA9-9FAFD205E455"]];
+//    [[BLEManager getInstance] setScanServiceUUIDs:@[@"49535343-FE7D-4AE5-8FA9-9FAFD205E455"]];
     
-    [[BLEManager getInstance] startScanByNameFilter:nil/*@[@"iMate",@"K203",@"HxBluetooth",@"JXNX"]*/ timeout:6];
+    [[BLEManager getInstance] startScanByNameFilter:nil/*@[@"iMate",@"K203",@"HxBluetooth",@"JXNX"]*/ timeout:10];
 }
 
 
@@ -121,8 +124,9 @@
 }
 
 
-#pragma mark - 搜索蓝牙的delegate
-- (void)searchBLEPeripheral:(SimplePeripheral * _Nonnull)peripheral{
+#pragma mark - 搜索蓝牙的通知
+-(void)myPeripheralFound:(NSNotification *)notification{
+    SimplePeripheral *peripheral = [notification object];
     if([self.objects containsObject:peripheral])
         return;
     [self.objects insertObject:peripheral atIndex:0];
@@ -131,20 +135,21 @@
 }
 
 #pragma mark - 连接蓝牙的delegate
-- (void)BLEManagerStatus:(BOOL)isConnected device:(SimplePeripheral * _Nonnull)peripheral{
+-(void)myPeripheralConnected:(NSNotification *)notification{
     [self.tableView reloadData];
-    
     DetailViewController *detailViewController = (DetailViewController *)[[self.splitViewController.viewControllers lastObject] topViewController];
 
-    if (isConnected) {
-        NSLog(@"应用层得到设备连接成功的通知\n");
-        [detailViewController.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
-        detailViewController.connectOrDisconnect.tag = 1;
-    }else{
-        NSLog(@"应用层得到设备连接失败的通知\n");
-        [detailViewController.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
-        detailViewController.connectOrDisconnect.tag = 0;
-    }
+    NSLog(@"应用层得到设备连接成功的通知\n");
+    [detailViewController.connectOrDisconnect setTitle:@"断开设备" forState:UIControlStateNormal];
+    detailViewController.connectOrDisconnect.tag = 1;
+}
+-(void)myPeripheralDisconnected:(NSNotification*)notification{
+    [self.tableView reloadData];
+    DetailViewController *detailViewController = (DetailViewController *)[[self.splitViewController.viewControllers lastObject] topViewController];
+    
+    NSLog(@"应用层得到设备连接失败的通知\n");
+    [detailViewController.connectOrDisconnect setTitle:@"连接设备" forState:UIControlStateNormal];
+    detailViewController.connectOrDisconnect.tag = 0;
 }
 
 

@@ -15,6 +15,7 @@
     dispatch_queue_t myQueue;
     dispatch_semaphore_t sem;
 }
+@property (assign,atomic)     BOOL isReceivedPackFinish;
 
 @property (strong, nonatomic) NSDictionary              *serviceAndCharacteristicsDictionary;
 @property (copy, nonatomic)   PacketVerifyEvaluator      packetVerifyEvaluator;
@@ -235,7 +236,7 @@
     }
     
     __weak typeof(self) weakself = self;
-    dispatch_async(myQueue, ^{ //解决多线程写数据冲突的问题，使用main_queue进行排队
+    dispatch_async(myQueue, ^{
         
         int newMTU = (int)[self.peripheral maximumWriteValueLengthForType:_ResponseType];
         int AutoSendLength = 0;
@@ -255,10 +256,15 @@
         int length = (int)data.length;
         int offset = 0;
         int sendLength = 0;
+        
+        if(_ResponseType==CBCharacteristicWriteWithResponse){
+            sem = dispatch_semaphore_create(1);
+        }
         while (length) {
             
+            
             if(_ResponseType==CBCharacteristicWriteWithResponse){
-                sem = dispatch_semaphore_create(0);
+                dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
             }
             
             sendLength = length;
@@ -271,10 +277,6 @@
                                        type:weakself.ResponseType];
             offset += sendLength;
             length -= sendLength;
-            
-            if(_ResponseType==CBCharacteristicWriteWithResponse){
-                dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
-            }
         }
     });
     return YES;
@@ -322,6 +324,8 @@
     }
     _workingStatusDict[notifyUUIDString] = [NSNumber numberWithBool:YES];
     
+    _isReceivedPackFinish = NO;
+    
     __weak typeof(self) weakself = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         
@@ -341,8 +345,6 @@
             usleep(100000);
         }
         
-        [weakself.NotifyUUIDStringAndBlockDict setValue:callback forKey:notifyUUIDString];
-        
         if([weakself sendData:data withWC:writeUUIDString]==NO){
             dispatch_async(dispatch_get_main_queue(), ^{
                 callback(nil,[NSError errorWithDomain:@"com.zhangbh.SimpleBLEKit" code:3 userInfo:@{@"info":@"写入特征找不到"}]);
@@ -360,6 +362,7 @@
             return;
         }
         
+        [weakself.NotifyUUIDStringAndBlockDict setValue:callback forKey:notifyUUIDString];
         
         //NSTimer只能在主队列建立
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -377,6 +380,40 @@
             [weakself.NotifyUUIDStringAndNSTimerDict setValue:timer forKey:notifyUUIDString];
         });
     });
+}
+
+
+//收到数据 --》解析数据
+-(BOOL)hasReceiveData:(NSString *)uuidString{
+
+    NSLog(@"数据长度总长:%ld",(unsigned long)[[_dataDescription getPacketData:uuidString] length]);
+    receiveDataBlock receiveCallback = [_NotifyUUIDStringAndBlockDict objectForKey:uuidString];
+    if(receiveCallback!=nil){
+
+        if([_dataDescription isValidPacket:uuidString]){//如果收包完整
+            
+            //关闭定时器，从定时器池中移除定时器
+            NSTimer *timer = [_NotifyUUIDStringAndNSTimerDict objectForKey:uuidString];
+            if (timer!=nil) {
+                if ([timer isValid]) {
+                    [timer invalidate];//关闭定时器
+                    timer = nil;
+                    [_NotifyUUIDStringAndNSTimerDict removeObjectForKey:uuidString];
+                }
+                receiveCallback([_dataDescription getPacketData:uuidString],nil);
+                _workingStatusDict[uuidString] = [NSNumber numberWithBool:NO];//更改状态
+            }else{
+                NSLog(@"超时后收到的数据，宝宝只能舍弃了");
+            }
+            //移除回调方法
+            [_NotifyUUIDStringAndBlockDict removeObjectForKey:uuidString];
+            
+            return YES;
+        }else{
+            return NO;
+        }
+    }
+    return YES;
 }
 
 #pragma mark 只订阅通知，不发送数据
@@ -660,49 +697,38 @@
         NSLog(@"%@特征收到数据:%@",uuidString,characteristic.value);
     }
 
+    __weak typeof(self) weakself = self;
     updateDataBlock updateCallback = [_continueNotifyUUIDStringAndBlockDict objectForKey:uuidString];
     receiveDataBlock receiveCallback = [_NotifyUUIDStringAndBlockDict objectForKey:uuidString];
     if (updateCallback !=nil && [_workingStatusDict[uuidString] boolValue]==NO) {
-        updateCallback(characteristic.value);
-    }else if(receiveCallback!=nil){
-        [_dataDescription appendData:characteristic.value uuid:uuidString];//这里不断收集数据。发送接收用
-        if(_isLog) {
-            NSLog(@"数据长度总长:%ld",(unsigned long)[[_dataDescription getPacketData:uuidString] length]);
-        }
+        //放在全局队列里，防止阻塞收数据的队列
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            updateCallback(characteristic.value);
+        });
         
-        if([_dataDescription isValidPacket:uuidString]){//如果收包完整
-            
-            //关闭定时器，从定时器池中移除定时器
-            NSTimer *timer = [_NotifyUUIDStringAndNSTimerDict objectForKey:uuidString];
-            if (timer!=nil) {
-                if ([timer isValid]) {
-                    [timer invalidate];//关闭定时器
-                    timer = nil;
-                    [_NotifyUUIDStringAndNSTimerDict removeObjectForKey:uuidString];
-                }
-                receiveCallback([_dataDescription getPacketData:uuidString],nil);
-                _workingStatusDict[uuidString] = [NSNumber numberWithBool:NO];//更改状态
-            }else{
-                NSLog(@"超时后收到的数据，宝宝只能舍弃了");
-            }
-            
-            //移除回调方法
-            [_NotifyUUIDStringAndBlockDict removeObjectForKey:uuidString];
-            
-            return;
+    }else if(receiveCallback!=nil){
+
+        [_dataDescription appendData:characteristic.value uuid:uuidString];//这里不断收集数据。
+        if(_isLog) {
+            NSLog(@"0数据长度总长:%ld",(unsigned long)[[_dataDescription getPacketData:uuidString] length]);
         }
+        dispatch_async(myQueue, ^{ //全局队列，使用异步任务解析数据，才能不阻塞收数据的delegate队列
+            if (_isReceivedPackFinish==NO) {
+                _isReceivedPackFinish = [weakself hasReceiveData:uuidString];//真正解析数据的方法
+//                usleep(1000000);//测试如果解析方法花太长时间会不会导致收数据慢。结论是不会。
+            }
+        });
     }
     
     if (_AckData!=nil && _AckWriteCharacteristicUUIDString!=nil && [_dataDescription isNeedToACK:uuidString]) {
+    
+//        dispatch_async(dispatch_get_main_queue(), ^{
         
-        __weak typeof(self) weakself = self;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            
-            [weakself.peripheral writeValue:weakself.AckData
-                      forCharacteristic:[weakself.Characteristics objectForKey:weakself.AckWriteCharacteristicUUIDString]
-                                   type:weakself.ResponseType];
-            if(weakself.isLog) NSLog(@"宝宝赶紧回了一个应答:%@",weakself.AckData);
-        });
+            [_peripheral writeValue:_AckData
+                      forCharacteristic:[_Characteristics objectForKey:_AckWriteCharacteristicUUIDString]
+                                   type:_ResponseType];
+            if(_isLog) NSLog(@"宝宝赶紧回了一个应答:%@",_AckData);
+//        });
     };
 }
 

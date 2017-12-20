@@ -10,7 +10,7 @@
 #import "SimplePeripheralPrivate.h"
 #import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20171215_LAST_COMMIT=06c8c4e"
+#define BLE_SDK_VERSION @"20171220_LAST_COMMIT=def4fa8"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -470,7 +470,7 @@
         if (strongself.MysearchBLEBlock) {
             strongself.MysearchBLEBlock(simplePeripheral);
         }else{
-            [[NSNotificationCenter defaultCenter] postNotificationName:BLE_DEVICE_FOUND object:peripheral];
+            [[NSNotificationCenter defaultCenter] postNotificationName:BLE_DEVICE_FOUND object:simplePeripheral];
         }
     });
 }

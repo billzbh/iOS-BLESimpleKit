@@ -69,7 +69,7 @@
     }];
     //加快搜索服务和特征速度，间接加快连接速度.
     //格式: @{service1:@[characterist1,characterist2],service2:@[characterist3,characterist4]}
-    [_selectedPeripheral setServiceAndCharacteristicsDictionary:@{serviceuuid:@[writeuuid]}];
+    [_selectedPeripheral setServiceAndCharacteristicsDictionary:@{serviceuuid:@[writeuuid,notifyuuid]}];
 //    [_selectedPeripheral setServiceAndCharacteristicsDictionary:nil];
     //发起连接前，对外设做各项设置(可选) === end ===
     
@@ -154,10 +154,12 @@
     NSString * writeuuid =  self.writeUuid.text;
     
     
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+//    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+//
+//        [_selectedPeripheral sendData:data withWC:writeuuid];
+//    });
     
-        [_selectedPeripheral sendData:data withWC:writeuuid];
-    });
+    
     
 //    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 //        NSDictionary *dict = [_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:20];
@@ -166,15 +168,16 @@
 //    });
     
     
-//    [_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:100 receiveData:^(NSData * _Nullable outData, NSError * _Nullable error) {
-//        
-//        if(error){
-//            [self showLogMessage:[NSString stringWithFormat:@"%@",error]];
-//        }else{
-//            NSString *out = [NSString stringWithFormat:@"%@从%@收到的包完整数据:\n%@\n",[self getTimeNow],[_selectedPeripheral getPeripheralName],[BLEManager NSData2hexString:outData]];
-//            [self showLogMessage:out];
-//        }
-//    }];
+    
+    [_selectedPeripheral sendData:data withWC:writeuuid withNC:notifyuuid timeout:100 receiveData:^(NSData * _Nullable outData, NSError * _Nullable error) {
+        
+        if(error){
+            [self showLogMessage:[NSString stringWithFormat:@"%@",error]];
+        }else{
+            NSString *out = [NSString stringWithFormat:@"%@从%@收到的包完整数据:\n%@\n",[self getTimeNow],[_selectedPeripheral getPeripheralName],[BLEManager NSData2hexString:outData]];
+            [self showLogMessage:out];
+        }
+    }];
 }
 
 
