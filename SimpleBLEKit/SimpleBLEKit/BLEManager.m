@@ -10,7 +10,7 @@
 #import "SimplePeripheralPrivate.h"
 #import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20171220_LAST_COMMIT=def4fa8"
+#define BLE_SDK_VERSION @"20171221_LAST_COMMIT=8885617"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -24,6 +24,7 @@
 @property (strong, nonatomic) NSMutableDictionary  *searchedDeviceUUIDArray;
 @property (assign,nonatomic) BOOL isLogOn;
 @property (weak,nonatomic) NSTimer * scanTimer;
+@property (strong,nonatomic) NSMutableDictionary *SaveIdentifiersDict;
 @end
 
 @implementation BLEManager
@@ -211,6 +212,21 @@
         [_searchedDeviceUUIDArray removeAllObjects];
     }
     
+    //断开可能由于程序被挂起后没有cancel的连接
+    NSDictionary * dict = [self getDict];
+    if (dict.count!=0) {
+        NSMutableArray <NSUUID *>* identifiers = [NSMutableArray arrayWithCapacity:10];
+        for (NSString *uuidString in [dict allValues]) {
+            [identifiers addObject:[[NSUUID alloc] initWithUUIDString:uuidString]];
+        }
+        NSArray<CBPeripheral *>* oldConnectedPeripherals =[_centralManager retrievePeripheralsWithIdentifiers:identifiers];
+        for (CBPeripheral *cbP in oldConnectedPeripherals) {
+            if(cbP.state==CBPeripheralStateDisconnected || cbP.state==CBPeripheralStateDisconnecting){
+                [_centralManager cancelPeripheralConnection:cbP];
+            }
+        }
+    }
+    
     if(_isLogOn) NSLog(@"搜索前，上报设备池中已连接的外设...");
     //将已经连接的设备也上报
     __weak typeof(self) weakself = self;
@@ -293,6 +309,21 @@
         [_searchedDeviceUUIDArray removeAllObjects];
     }
     
+    //断开可能由于程序被挂起后没有cancel的连接
+    NSDictionary * dict = [self getDict];
+    if (dict.count!=0) {
+        NSMutableArray <NSUUID *>* identifiers = [NSMutableArray arrayWithCapacity:10];
+        for (NSString *uuidString in [dict allValues]) {
+            [identifiers addObject:[[NSUUID alloc] initWithUUIDString:uuidString]];
+        }
+        NSArray<CBPeripheral *>* oldConnectedPeripherals =[_centralManager retrievePeripheralsWithIdentifiers:identifiers];
+        for (CBPeripheral *cbP in oldConnectedPeripherals) {
+            if(cbP.state==CBPeripheralStateDisconnected || cbP.state==CBPeripheralStateDisconnecting){
+                [_centralManager cancelPeripheralConnection:cbP];
+            }
+        }
+    }
+    
     if(_isLogOn) NSLog(@"搜索前，上报设备池中已连接的外设...");
     //将已经连接的设备也上报
     __weak typeof(self) weakself = self;
@@ -366,6 +397,44 @@
     }
 }
 
+//同步获取曾经连接过的设备
+-(NSArray<SimplePeripheral *>*)startFindOldConnectedDeviceByNameFilter:(NSArray<NSString *> *)nameFilters{
+    
+    NSMutableArray *arr = [NSMutableArray arrayWithCapacity:10];
+    NSDictionary * dict = [self getDict];
+    if (dict.count!=0) {
+        
+        
+        NSMutableArray <NSUUID *>* identifiers = [NSMutableArray arrayWithCapacity:10];
+        for (NSString *uuidString in [dict allValues]) {
+            [identifiers addObject:[[NSUUID alloc] initWithUUIDString:uuidString]];
+        }
+        NSArray<CBPeripheral *>* oldConnectedPeripherals =[_centralManager retrievePeripheralsWithIdentifiers:identifiers];
+        
+        if(_isLogOn) NSLog(@"搜索前，上报曾经连接过的设备...");
+        SimplePeripheral *tmpPeripheral;
+        for (CBPeripheral *cbP in oldConnectedPeripherals) {
+            if(_FilterBleNameArray!=nil){
+                int i = 0;
+                for (NSString* name in _FilterBleNameArray) {
+                    if([cbP.name containsString:name])
+                        break;
+                    i++;
+                }
+                if (i==[_FilterBleNameArray count]) {
+                    continue;
+                }
+            }
+            
+            if(_isLogOn) NSLog(@"└┈上报:%@",cbP.name);
+            tmpPeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
+            [tmpPeripheral setPeripheral:cbP];
+            [arr addObject:tmpPeripheral];
+        }
+    }
+    return arr;
+}
+
 
 -(void)connectDevice:(SimplePeripheral *)simplePeripheral
 {
@@ -399,9 +468,7 @@
 }
 
 -(void)centralManager:(CBCentralManager *)central willRestoreState:(NSDictionary<NSString *,id> *)dict{
-    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
-    
-    
+//    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
 //    恢复的外设对象
 //    SimplePeripheral *tmpPeripheral;
 //    for (CBPeripheral *cbP in peripherals) {
@@ -504,11 +571,29 @@
 #pragma mark 蓝牙连接状态的通知
 -(void)myPeripheralConnected:(NSNotification *)notification{
     SimplePeripheral *simplePeripheral = [notification object];
-    [_ConnectDevice_dict setValue:simplePeripheral forKey:[simplePeripheral.peripheral.identifier UUIDString]];
+    NSString *key = [simplePeripheral.peripheral.identifier UUIDString];
+    [_ConnectDevice_dict setValue:simplePeripheral forKey:key];
+    
+    [[self getDict] setValue:key forKey:key];
+    [[NSUserDefaults standardUserDefaults] setValue:[self getDict] forKey:@"HxsmartConnectedIdentifiers"];
 }
+
 -(void)myPeripheralDisconnected:(NSNotification*)notification{
     SimplePeripheral *simplePeripheral = [notification object];
     [_ConnectDevice_dict removeObjectForKey:[simplePeripheral.peripheral.identifier UUIDString]];
+}
+
+-(NSMutableDictionary *)getDict{
+    
+    if (_SaveIdentifiersDict==nil) {
+        NSDictionary *dict = [[NSUserDefaults standardUserDefaults] objectForKey:@"HxsmartConnectedIdentifiers"];
+        if (dict==nil) {
+            _SaveIdentifiersDict = [NSMutableDictionary dictionaryWithCapacity:10];
+        }else{
+            _SaveIdentifiersDict = [NSMutableDictionary dictionaryWithDictionary:dict];
+        }
+    }
+    return _SaveIdentifiersDict;
 }
 
 #pragma mark - 静态方法

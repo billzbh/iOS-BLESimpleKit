@@ -55,7 +55,6 @@
         return;
     }
     
-    
     //发起连接前，对外设做各项设置(可选) === start ===
     if (_isSetMTU.isOn) {
         [_selectedPeripheral setMTU:mtu];
@@ -310,9 +309,9 @@
     // Update the user interface for the detail item.
     if (_selectedPeripheral) {
         self.navigationItem.title =[_selectedPeripheral getPeripheralName];
+        [self.connectOrDisconnect setTitle:[_selectedPeripheral isConnected]?@"断开设备":@"连接设备" forState:UIControlStateNormal];
+        self.connectOrDisconnect.tag = [_selectedPeripheral isConnected]?1:0;
     }
-    [self.connectOrDisconnect setTitle:[_selectedPeripheral isConnected]?@"断开设备":@"连接设备" forState:UIControlStateNormal];
-    self.connectOrDisconnect.tag = [_selectedPeripheral isConnected]?1:0;
 }
 
 

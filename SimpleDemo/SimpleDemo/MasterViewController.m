@@ -119,7 +119,11 @@
 
     SimplePeripheral *object = self.objects[indexPath.row];
     cell.textLabel.text = [object getPeripheralName];
-    cell.accessoryType = [object isConnected]?UITableViewCellAccessoryCheckmark:UITableViewCellAccessoryNone;
+    if ([object isConnected]) {//已经连接
+        cell.accessoryType = UITableViewCellAccessoryCheckmark;
+    }else{//已经断开
+        cell.accessoryType =UITableViewCellAccessoryNone;
+    }
     return cell;
 }
 

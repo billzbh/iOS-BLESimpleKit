@@ -6,6 +6,9 @@
 //  Copyright © 2017年 hxsmart. All rights reserved.
 //
 
+// ios11 在xcode9.1上调试时蓝牙如果已经连接，此时点击停止，外设可能没有收到蓝牙断开的通知，还是显示已连接。导致之后搜索不到
+// 然而通过手划掉，这种方式杀死app，是可以正常断掉蓝牙的，外设也得到了通知，显示蓝牙断开。
+
 #import <Foundation/Foundation.h>
 #import "SimplePeripheral.h"
 #import <CoreBluetooth/CoreBluetooth.h>
@@ -31,8 +34,12 @@
 -(void)startScanByNameFilter:(NSArray<NSString *>*_Nullable)nameFilters
          timeout:(NSTimeInterval)interval;
 //搜索符合过滤名称的设备 block方式
--(void)startScan:(SearchBlock _Nonnull)searchBLEBlock nameFilter:(NSArray<NSString *>*)nameFilters
+-(void)startScan:(SearchBlock)searchBLEBlock nameFilter:(NSArray<NSString *>*)nameFilters
          timeout:(NSTimeInterval)interval;
+
+//搜索此SDK曾经连接过的设备（不管此时外设在不在线）
+-(NSArray<SimplePeripheral *>*)startFindOldConnectedDeviceByNameFilter:(NSArray<NSString *> *)nameFilters;
+
 
 //停止搜索
 -(void)stopScan;
