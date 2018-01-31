@@ -10,7 +10,7 @@
 #import "SimplePeripheralPrivate.h"
 #import <UIKit/UIApplication.h>
 
-#define BLE_SDK_VERSION @"20171221_LAST_COMMIT=8885617"
+#define BLE_SDK_VERSION @"20171228_LAST_COMMIT=b7e748f"
 #define BLE_SDK_RestoreIdentifierKey @"com.zbh.SimpleBLEKit.RestoreKey"
 
 @interface BLEManager () <CBCentralManagerDelegate>
@@ -213,7 +213,7 @@
     }
     
     //断开可能由于程序被挂起后没有cancel的连接
-    NSDictionary * dict = [self getDict];
+    NSDictionary * dict = [self getDict];//从本地存储取出来的identifiers字符串
     if (dict.count!=0) {
         NSMutableArray <NSUUID *>* identifiers = [NSMutableArray arrayWithCapacity:10];
         for (NSString *uuidString in [dict allValues]) {
@@ -426,7 +426,6 @@
                 }
             }
             
-            if(_isLogOn) NSLog(@"└┈上报:%@",cbP.name);
             tmpPeripheral = [[SimplePeripheral alloc] initWithCentralManager:_centralManager];
             [tmpPeripheral setPeripheral:cbP];
             [arr addObject:tmpPeripheral];
@@ -442,6 +441,7 @@
         if(_isLogOn) NSLog(@"蓝牙状态异常，请打开蓝牙");
         return;
     }
+    _centralManager.delegate = self;
     [simplePeripheral connectDevice];
 }
 
@@ -468,7 +468,8 @@
 }
 
 -(void)centralManager:(CBCentralManager *)central willRestoreState:(NSDictionary<NSString *,id> *)dict{
-//    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
+    NSArray *peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey];
+    
 //    恢复的外设对象
 //    SimplePeripheral *tmpPeripheral;
 //    for (CBPeripheral *cbP in peripherals) {
@@ -476,7 +477,7 @@
 //        [tmpPeripheral setPeripheral:cbP];
 //        [tmpPeripheral setIsLog:YES];
 //        [tmpPeripheral setIsAutoReconnect:YES];
-//        [tmpPeripheral setIsRestorePeripheral:YES];
+////        [tmpPeripheral setIsRestorePeripheral:YES];
 //
 //        [self connectDevice:tmpPeripheral];
 //    }
@@ -489,6 +490,13 @@
                    RSSI:(NSNumber *)RSSI
 {
     NSString *btLocalName = advertisementData[CBAdvertisementDataLocalNameKey];
+//    BOOL isConnectable = advertisementData[CBAdvertisementDataIsConnectable];
+//    NSLog(@"%d",isConnectable);
+//    NSDictionary *dict =  advertisementData[CBAdvertisementDataServiceDataKey];
+//    if (dict) {
+//        NSLog(@"\n\n\n*******************%@==%@*********************\n\n\n",btLocalName,dict);
+//    }
+    
     if (peripheral==nil || btLocalName==nil || [[btLocalName stringByReplacingOccurrencesOfString:@" " withString:@""] isEqualToString:@""]) {
 #ifdef DEBUG
         if(_isLogOn) NSLog(@"└┈搜索到设备:%@(名称为空)",btLocalName);
